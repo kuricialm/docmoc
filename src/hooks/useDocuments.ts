@@ -31,9 +31,9 @@ export function useDocuments(filter?: {
 
   return useQuery({
     queryKey: ['documents', user?.id, filter],
-    queryFn: () => {
+    queryFn: async () => {
       if (!user) return [];
-      return api.getDocuments(user.id, filter) as Document[];
+      return (await api.getDocuments(user.id, filter)) as unknown as Document[];
     },
     enabled: !!user,
   });
