@@ -6,7 +6,6 @@ import DocumentCard from '@/components/DocumentCard';
 import DocumentListView from '@/components/DocumentListView';
 import DocumentViewer from '@/components/DocumentViewer';
 import RenameDialog from '@/components/RenameDialog';
-import TagManager from '@/components/TagManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Edit2, Trash2, X, Check } from 'lucide-react';
@@ -21,7 +20,6 @@ export default function TagView({ viewMode, search }: Props) {
   const { updateTag, deleteTag } = useTagMutations();
   const [viewDoc, setViewDoc] = useState<Document | null>(null);
   const [renameDoc, setRenameDoc] = useState<Document | null>(null);
-  const [tagDoc, setTagDoc] = useState<Document | null>(null);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
 
@@ -65,15 +63,14 @@ export default function TagView({ viewMode, search }: Props) {
         <p className="text-sm text-muted-foreground text-center py-20">No documents with this tag</p>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map((doc) => <DocumentCard key={doc.id} document={doc} onView={setViewDoc} onRename={setRenameDoc} onTagManage={setTagDoc} />)}
+          {filtered.map((doc) => <DocumentCard key={doc.id} document={doc} onView={setViewDoc} onRename={setRenameDoc} />)}
         </div>
       ) : (
-        <DocumentListView documents={filtered} onView={setViewDoc} onRename={setRenameDoc} onTagManage={setTagDoc} />
+        <DocumentListView documents={filtered} onView={setViewDoc} onRename={setRenameDoc} />
       )}
 
       <DocumentViewer document={viewDoc} open={!!viewDoc} onClose={() => setViewDoc(null)} />
       <RenameDialog document={renameDoc} open={!!renameDoc} onClose={() => setRenameDoc(null)} />
-      <TagManager document={tagDoc} open={!!tagDoc} onClose={() => setTagDoc(null)} />
     </div>
   );
 }
