@@ -4,7 +4,6 @@ import DashboardStats from '@/components/DashboardStats';
 import DocumentCard from '@/components/DocumentCard';
 import DocumentListView from '@/components/DocumentListView';
 import DocumentViewer from '@/components/DocumentViewer';
-import TagManager from '@/components/TagManager';
 import RenameDialog from '@/components/RenameDialog';
 
 type Props = {
@@ -19,7 +18,6 @@ export default function AllDocuments({ viewMode, search, uploadTrigger }: Props)
   const { uploadDocument } = useDocumentMutations();
   const [viewDoc, setViewDoc] = useState<Document | null>(null);
   const [renameDoc, setRenameDoc] = useState<Document | null>(null);
-  const [tagDoc, setTagDoc] = useState<Document | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filtered = allDocs.filter((d) =>
@@ -36,9 +34,7 @@ export default function AllDocuments({ viewMode, search, uploadTrigger }: Props)
   return (
     <div className="space-y-6">
       <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileChange} id="file-upload" />
-
       <DashboardStats documents={[...allDocs, ...trashedDocs]} />
-
       {filtered.length === 0 ? (
         <div className="text-center py-20">
           <p className="text-muted-foreground text-sm">No documents yet</p>
@@ -47,16 +43,14 @@ export default function AllDocuments({ viewMode, search, uploadTrigger }: Props)
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((doc) => (
-            <DocumentCard key={doc.id} document={doc} onView={setViewDoc} onRename={setRenameDoc} onTagManage={setTagDoc} />
+            <DocumentCard key={doc.id} document={doc} onView={setViewDoc} onRename={setRenameDoc} />
           ))}
         </div>
       ) : (
-        <DocumentListView documents={filtered} onView={setViewDoc} onRename={setRenameDoc} onTagManage={setTagDoc} />
+        <DocumentListView documents={filtered} onView={setViewDoc} onRename={setRenameDoc} />
       )}
-
       <DocumentViewer document={viewDoc} open={!!viewDoc} onClose={() => setViewDoc(null)} />
       <RenameDialog document={renameDoc} open={!!renameDoc} onClose={() => setRenameDoc(null)} />
-      <TagManager document={tagDoc} open={!!tagDoc} onClose={() => setTagDoc(null)} />
     </div>
   );
 }
