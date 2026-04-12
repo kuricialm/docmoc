@@ -31,9 +31,9 @@ export function useDocuments(filter?: {
 
   return useQuery({
     queryKey: ['documents', user?.id, filter],
-    queryFn: () => {
+    queryFn: async () => {
       if (!user) return [];
-      return api.getDocuments(user.id, filter) as Document[];
+      return (await api.getDocuments(user.id, filter)) as unknown as Document[];
     },
     enabled: !!user,
   });
@@ -55,7 +55,7 @@ export function useDocumentMutations() {
 
   const renameDocument = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      api.renameDocument(id, name);
+      await api.renameDocument(id, name);
     },
     onSuccess: () => { invalidate(); toast.success('Renamed'); },
     onError: (e: Error) => toast.error(e.message),
@@ -63,19 +63,19 @@ export function useDocumentMutations() {
 
   const toggleStar = useMutation({
     mutationFn: async ({ id, starred }: { id: string; starred: boolean }) => {
-      api.toggleStar(id, starred);
+      await api.toggleStar(id, starred);
     },
     onSuccess: () => invalidate(),
   });
 
   const trashDocument = useMutation({
-    mutationFn: async (id: string) => { api.trashDocument(id); },
+    mutationFn: async (id: string) => { await api.trashDocument(id); },
     onSuccess: () => { invalidate(); toast.success('Moved to trash'); },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const restoreDocument = useMutation({
-    mutationFn: async (id: string) => { api.restoreDocument(id); },
+    mutationFn: async (id: string) => { await api.restoreDocument(id); },
     onSuccess: () => { invalidate(); toast.success('Restored'); },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -90,7 +90,7 @@ export function useDocumentMutations() {
 
   const toggleShare = useMutation({
     mutationFn: async ({ id, shared }: { id: string; shared: boolean }) => {
-      api.toggleShare(id, shared);
+      await api.toggleShare(id, shared);
     },
     onSuccess: () => invalidate(),
     onError: (e: Error) => toast.error(e.message),
