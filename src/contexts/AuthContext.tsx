@@ -24,6 +24,43 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
+const DEFAULT_PRIMARY_HSL = '217 91% 60%';
+
+const hexToHsl = (hex: string) => {
+  const normalizedHex = hex.replace('#', '');
+  if (normalizedHex.length !== 6) return null;
+
+  const r = parseInt(normalizedHex.substring(0, 2), 16) / 255;
+  const g = parseInt(normalizedHex.substring(2, 4), 16) / 255;
+  const b = parseInt(normalizedHex.substring(4, 6), 16) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  const lightness = (max + min) / 2;
+
+  let hue = 0;
+  let saturation = 0;
+
+  if (delta !== 0) {
+    saturation = delta / (1 - Math.abs(2 * lightness - 1));
+    switch (max) {
+      case r:
+        hue = ((g - b) / delta) % 6;
+        break;
+      case g:
+        hue = (b - r) / delta + 2;
+        break;
+      default:
+        hue = (r - g) / delta + 4;
+    }
+    hue *= 60;
+    if (hue < 0) hue += 360;
+  }
+
+  return `${Math.round(hue)} ${Math.round(saturation * 100)}% ${Math.round(lightness * 100)}%`;
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -82,6 +119,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut();
   };
+
+  useEffect(() => {
+    const accentHsl = profile?.accent_color ? hexToHsl(profile.accent_color) : null;
+    const primaryColor = accentHsl || DEFAULT_PRIMARY_HSL;
+    const root = document.documentElement;
+
+    root.style.setProperty('--primary', primaryColor);
+    root.style.setProperty('--ring', primaryColor);
+    root.style.setProperty('--sidebar-primary', primaryColor);
+  }, [profile?.accent_color]);
 
   return (
     <AuthContext.Provider value={{ user, session, loading, isAdmin, profile, signOut, refreshProfile }}>
