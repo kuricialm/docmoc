@@ -63,7 +63,7 @@ export default function DocumentCard({ document: doc, onView, onRename }: Props)
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRename(doc); }} className="gap-2">
                 <Edit2 className="w-3.5 h-3.5" /> Rename
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); downloadDocument(doc.storage_path, doc.name); }} className="gap-2">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); downloadDocument(doc.id, doc.name); }} className="gap-2">
                 <Download className="w-3.5 h-3.5" /> Download
               </DropdownMenuItem>
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleShare.mutate({ id: doc.id, shared: !doc.shared }); }} className="gap-2">

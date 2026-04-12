@@ -40,7 +40,7 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
     if (!doc || !open) { setPreviewUrl(null); setTextContent(null); return; }
 
     const loadPreview = async () => {
-      const blob = await api.getDocumentBlob(doc.storage_path);
+      const blob = await api.getDocumentBlob(doc.id);
       if (!blob) return;
       if (doc.file_type === 'text/plain') {
         setTextContent(await blob.text());
@@ -132,7 +132,7 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
               <div className="flex flex-col items-center justify-center space-y-3">
                 <FileTypeIcon fileType={doc.file_type} size="lg" />
                 <p className="text-sm text-muted-foreground">Preview not available for this format</p>
-                <Button variant="outline" size="sm" onClick={() => downloadDocument(doc.storage_path, doc.name)}>
+                <Button variant="outline" size="sm" onClick={() => downloadDocument(doc.id, doc.name)}>
                   <Download className="w-3.5 h-3.5 mr-1.5" /> Download to view
                 </Button>
               </div>
@@ -180,7 +180,7 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
             <div className="p-4 space-y-3 border-b">
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Actions</h3>
               <div className="flex flex-col gap-1.5">
-                <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => downloadDocument(doc.storage_path, doc.name)}>
+                <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => downloadDocument(doc.id, doc.name)}>
                   <Download className="w-3.5 h-3.5" /> Download
                 </Button>
                 <Button variant="outline" size="sm" className="justify-start gap-2" onClick={() => toggleShare.mutate({ id: doc.id, shared: !doc.shared })}>

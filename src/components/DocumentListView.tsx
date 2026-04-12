@@ -78,7 +78,7 @@ export default function DocumentListView({ documents, onView, onRename }: Props)
                     <DropdownMenuContent align="end" className="w-44">
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onView(doc); }} className="gap-2"><Eye className="w-3.5 h-3.5" /> View</DropdownMenuItem>
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRename(doc); }} className="gap-2"><Edit2 className="w-3.5 h-3.5" /> Rename</DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); downloadDocument(doc.storage_path, doc.name); }} className="gap-2"><Download className="w-3.5 h-3.5" /> Download</DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); downloadDocument(doc.id, doc.name); }} className="gap-2"><Download className="w-3.5 h-3.5" /> Download</DropdownMenuItem>
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleShare.mutate({ id: doc.id, shared: !doc.shared }); }} className="gap-2"><Share2 className="w-3.5 h-3.5" /> {doc.shared ? 'Unshare' : 'Share'}</DropdownMenuItem>
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); trashDocument.mutate(doc.id); }} className="gap-2 text-destructive"><Trash2 className="w-3.5 h-3.5" /> Move to Trash</DropdownMenuItem>
                     </DropdownMenuContent>
