@@ -1,11 +1,13 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, LayoutGrid, List, Upload, LogOut } from 'lucide-react';
+import { Search, LayoutGrid, List, Upload, LogOut, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
@@ -19,6 +21,7 @@ type Props = {
 
 export default function TopBar({ viewMode, onViewModeChange, search, onSearchChange, onUpload }: Props) {
   const { profile, signOut } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <header className="h-14 border-b bg-card flex items-center px-4 gap-3 shrink-0">
@@ -56,6 +59,11 @@ export default function TopBar({ viewMode, onViewModeChange, search, onSearchCha
               <p className="text-sm font-medium truncate">{profile?.full_name || 'User'}</p>
               <p className="text-xs text-muted-foreground truncate">{profile?.email}</p>
             </div>
+            <DropdownMenuItem onClick={() => navigate('/settings')} className="gap-2">
+              <Settings className="w-4 h-4" />
+              Settings
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={signOut} className="gap-2 text-destructive">
               <LogOut className="w-4 h-4" />
               Sign Out
