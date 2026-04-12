@@ -1,96 +1,59 @@
 
-# Docmoc — Premium Document Manager
 
-## Overview
-A fully functional, minimal, premium document management app with admin/user roles, private workspaces, tagging, sharing, trash, and a polished modern UI.
+# Plan: Docmoc UX and Functional Fixes
 
-## Design Direction
-- **Palette**: Dark sidebar (#0F172A navy), clean white content area, slate accents, subtle blue primary (#3B82F6)
-- **Typography**: Inter for body, clean hierarchy with font-weight contrast
-- **Style**: Calm, premium, well-spaced cards with subtle shadows, refined borders, no emojis, no clutter
+## Changes
 
-## Backend (Lovable Cloud / Supabase)
+### 1. Tag management from sidebar (not document menu)
+- Remove "Manage Tags" from DocumentCard dropdown menu
+- Add a "Manage Tags" link/button in the sidebar Tags section header (visible when expanded)
+- Create a standalone TagManagerDialog that opens from the sidebar to create/rename/delete tags (not document-specific)
+- Keep per-document tag assignment inline in the DocumentViewer (see below)
 
-### Database Tables
-- **profiles** — user metadata (name, avatar, workspace logo)
-- **user_roles** — admin/user roles (enum-based, separate table)
-- **documents** — file metadata (name, type, size, storage_path, user_id, starred, trashed, trashed_at, shared, share_token)
-- **tags** — per-user colored tags (name, color, user_id)
-- **document_tags** — many-to-many join
-- **document_notes** — private notes per document per user
+### 2. Sidebar tag items: rename and better UX
+- Change the sidebar "Tags" section label to just "Tags" (already correct)
+- Use `Tag` icon instead of `Star` icon for the "Manage Tags" menu item in DocumentCard (fix the icon mismatch)
+- Add hover background to sidebar tag links for better hover UX
 
-### Storage Buckets
-- **documents** — file uploads (private, RLS-protected)
-- **workspace-logos** — user workspace logos (public)
+### 3. Inline tag add/remove in DocumentViewer
+- In the tags section of DocumentViewer, show each tag as a pill with an X button to remove it
+- Add a "+" button after all tags that opens a small popover/dropdown to pick from existing tags and add them
+- This replaces the separate TagManager dialog when viewing a document
 
-### RLS Policies
-- Users can only access their own documents, tags, notes
-- Admin can read all users/documents for management
-- Public share access via share_token (no auth required)
+### 4. Star toggle in DocumentViewer
+- Add a star button in the DocumentViewer header next to the document title
+- Clicking toggles starred state using existing `toggleStar` mutation
 
-### Edge Function
-- **public-document** — serves shared documents by token without auth
+### 5. Fix sharing
+- Debug: the `toggleShare` mutation looks correct. The issue is likely that the `SharedDocument` page queries with `.eq('share_token', token)` but needs anon access. Check the RLS policy -- there IS an anon SELECT policy for shared docs. The storage bucket is private though, so the SharedDocument page tries `supabase.storage.from('documents').download()` and `createSignedUrl()` as anon, which will fail due to storage RLS.
+- Fix: Create a storage policy allowing public/anon download when the file's document record has `shared = true`, OR use a signed URL approach from an edge function. Simplest fix: add a storage RLS policy for the `documents` bucket that allows SELECT for objects matching shared documents.
+- Actually, Supabase storage policies work on the bucket level with path-based policies, not document metadata. The cleanest fix: create a small edge function `get-shared-file` that takes a share_token, verifies the document is shared, and returns the file using the service role key.
 
-## Frontend Pages & Components
+### 6. Fix "preview not available" icon centering
+- In DocumentViewer, the fallback `<div className="text-center space-y-3">` renders FileTypeIcon which is just an inline SVG. Add `flex flex-col items-center` to center it properly.
 
-### Auth
-- **Login page** — clean, minimal sign-in form
-- No self-registration (admin invites only)
+### 7. UI polish / less rigid feel
+- Add `transition-shadow` and smoother hover states to cards
+- Soften border radius on cards (use `rounded-xl` instead of `rounded-lg`)
+- Add subtle animation to dialog/modal open
+- Improve spacing and typography weight balance
+- Make buttons and interactive elements feel more fluid with better transitions
 
-### Main Layout
-- **Sidebar** — navigation (All Documents, Recent, Starred, Shared by Me, Trash), tags list, settings link, admin link (admin only)
-- **Top bar** — search, view toggle (grid/list), user menu
+## Technical Details
 
-### Dashboard / All Documents
-- **Stats bar** — total documents, recent uploads, shared count, trash count
-- **Document grid** — premium cards with thumbnail/file-type icon, name, type badge, date, size, tags, quick actions (star, share, trash, download)
-- **List view** — compact table alternative
+**Files to modify:**
+- `src/components/AppSidebar.tsx` — add "Manage Tags" button in sidebar
+- `src/components/DocumentViewer.tsx` — add star toggle, inline tag add/remove with X and +
+- `src/components/DocumentCard.tsx` — change Tag icon from Star to Tag, remove or keep "Tags" in dropdown
+- `src/components/TagManager.tsx` — refactor to work as standalone (sidebar-triggered) tag CRUD, not document-specific
+- `src/pages/SharedDocument.tsx` — use edge function for file access
+- `src/components/FileTypeIcon.tsx` — no change needed
+- `supabase/functions/get-shared-file/index.ts` — new edge function for shared file download
+- `src/index.css` — minor transition/animation improvements
 
-### Document Viewer (Modal)
-- Left: PDF/TXT preview (or "preview not available" message)
-- Right: metadata (name, type, size, uploaded date, tags) + private notes editor
+**New edge function `get-shared-file`:**
+- Accepts `token` query param
+- Looks up document by share_token where shared=true and trashed=false
+- Downloads file from storage using service role
+- Returns file with proper content-type headers
 
-### Other Pages
-- **Recent** — documents sorted by modified date
-- **Starred** — starred documents only
-- **Shared by Me** — all shared docs with toggle to disable sharing
-- **Trash** — soft-deleted docs with restore/permanent delete, 30-day retention
-- **Tag filter view** — documents filtered by selected tag
-
-### Settings
-- Change password (functional)
-- Upload/change workspace logo
-- Theme accent color picker (persisted, functional)
-
-### Admin Area
-- User list with roles
-- Invite/create user form
-- Edit user role
-- View user workspaces (document counts)
-
-## Key Functional Flows
-1. **Admin invites user** → creates auth user + profile + role
-2. **User signs in** → sees private workspace
-3. **Upload** → file goes to Supabase storage, metadata saved
-4. **Preview** → PDF rendered in iframe, TXT as text, others show format icon
-5. **Tag** → create/assign/remove colored tags
-6. **Share** → generate unique public link, toggle off later
-7. **Trash** → soft delete with 30-day auto-cleanup
-8. **Notes** → private per-document, only visible to owner
-9. **Settings** → password change, logo upload, theme color — all functional
-
-## Implementation Order
-1. Database schema, RLS, storage buckets
-2. Auth flow (login, protected routes)
-3. Main layout (sidebar, topbar)
-4. Document CRUD (upload, list, rename, download, delete)
-5. Dashboard stats + card/list views
-6. Document viewer modal with preview
-7. Tags system
-8. Starring + sharing
-9. Trash with restore/permanent delete
-10. Notes
-11. Settings page
-12. Admin area
-13. Public share endpoint
-14. Polish and end-to-end audit
