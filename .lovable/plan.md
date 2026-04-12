@@ -1,121 +1,129 @@
 
 
-# Rebuild Docmoc Without Supabase
-
-## Overview
-Strip all Supabase dependencies and replace them with a portable API client layer backed by in-memory/localStorage state. The app will be fully functional in the browser for demo/development, and architecturally ready to swap in any self-hosted backend (e.g. Express + SQLite + local filesystem).
+# Plan: Add Express Backend to Docmoc (Revised)
 
 ## Architecture
 
 ```text
-┌─────────────────────────────────────────┐
-│  React Frontend (unchanged UI/UX)       │
-│                                         │
-│  hooks/useDocuments ─┐                  │
-│  hooks/useTags      ─┤─► src/lib/api.ts │
-│  hooks/useNotes     ─┤   (API client)   │
-│  contexts/AuthContext┘                  │
-│                                         │
-│  src/lib/api.ts ───► localStorage store │
-│  (swap later for fetch() to real API)   │
-└─────────────────────────────────────────┘
+┌──────────────────────────────┐     ┌──────────────────────────────┐
+│  React SPA (Vite build)      │     │  Express Backend (server.cjs)│
+│                              │     │                              │
+│  src/lib/api.ts ─── fetch ──────►  │  /api/auth/*                 │
+│  (HTTP client)               │     │  /api/documents/*            │
+│                              │     │  /api/tags/*                 │
+│                              │     │  /api/notes/*                │
+│                              │     │  /api/users/*                │
+│                              │     │  /api/settings/*             │
+│                              │     │  /api/shared/*               │
+│                              │     │                              │
+│                              │     │  SQLite: ./data/docmoc.db    │
+│                              │     │  Files:  ./data/uploads/     │
+└──────────────────────────────┘     └──────────────────────────────┘
 ```
+
+## Key Design Decisions
+
+### File storage paths
+Files stored as `DATA_DIR/uploads/{userId}/{docId}.{ext}`. Original filename kept only in SQLite `documents.name`. No user-controlled strings in filesystem paths.
+
+### Seed admin
+Configurable via environment variables:
+- `ADMIN_EMAIL` (default: `admin@docmoc.local`)
+- `ADMIN_PASSWORD` (default: `admin`)
+- Only created on first run when no users exist in the database.
+
+### Sessions
+HTTP-only cookies. The server sets a `session` cookie with `httpOnly: true, sameSite: 'lax', path: '/'`. Frontend `api.ts` uses `credentials: 'include'` on all fetch calls -- no token handling in JS.
+
+### Passwords
+Hashed with `bcrypt` (via `bcryptjs` -- pure JS, no native deps). Passwords are never stored or compared in plain text. Login compares with `bcrypt.compareSync()`.
+
+### Shared links
+`GET /api/shared/:token` and `/api/shared/:token/download` are the only unauthenticated endpoints. They query by `share_token` where `shared=1 AND trashed=0`, returning only that single document's metadata/file. No directory listing, no path traversal, no access to other documents.
+
+### Trash cleanup
+On every app start and once per hour via `setInterval`, run:
+```sql
+DELETE FROM documents WHERE trashed = 1
+  AND trashed_at < datetime('now', '-30 days')
+```
+Also delete the corresponding files from disk. Retention period configurable via `TRASH_RETENTION_DAYS` env var (default: 30).
 
 ## What Changes
 
-### 1. Remove Supabase entirely
-- Delete `src/integrations/supabase/` directory
-- Delete `supabase/` directory (migrations, edge functions, config)
-- Remove `@supabase/supabase-js` from package.json
-- Remove `.env` references to Supabase vars
+### 1. Create `server.cjs`
+Express server with routes:
 
-### 2. Create `src/lib/api.ts` — portable data layer
-A single module that provides all CRUD operations using localStorage + in-memory state. Every function returns typed data matching the existing interfaces. This makes it trivial to later replace with `fetch('/api/...')` calls.
+- **Auth**: `POST /api/auth/login` (sets httpOnly cookie), `POST /api/auth/logout` (clears cookie), `GET /api/auth/me`
+- **Documents**: CRUD, upload (multipart via multer), download, star, trash, restore, share, permanent delete
+- **Tags**: CRUD + document-tag associations
+- **Notes**: GET/PUT per document
+- **Users** (admin only): list, create, update role
+- **Settings**: GET/PATCH (registration toggle)
+- **Shared**: GET metadata + GET download (no auth required)
+- **Logo**: POST upload
 
-Functions:
-- **Auth**: `login(email, password)`, `signOut()`, `getCurrentUser()`, `updatePassword()`, `createUser()` (admin)
-- **Documents**: `getDocuments(filters)`, `uploadDocument(file)`, `renameDocument()`, `toggleStar()`, `trashDocument()`, `restoreDocument()`, `permanentDelete()`, `toggleShare()`, `downloadDocument()`, `getDocumentPreviewUrl()`
-- **Tags**: `getTags()`, `createTag()`, `updateTag()`, `deleteTag()`, `addTagToDoc()`, `removeTagFromDoc()`
-- **Notes**: `getNote(docId)`, `upsertNote(docId, content)`
-- **Users** (admin): `getUsers()`, `updateUserRole()`
-- **Settings**: `updateProfile()`, `uploadLogo()`
+Auth middleware reads session cookie, looks up in `sessions` table, attaches `req.user`. Shared endpoints skip auth.
 
-Storage: Documents stored as base64 in localStorage (or IndexedDB for larger files). A seed admin user (`admin@docmoc.local` / `admin`) is pre-configured.
+Static serving: in production, serves Vite `dist/` folder.
 
-### 3. Rewrite `src/contexts/AuthContext.tsx`
-- Remove all Supabase auth imports
-- Use `api.login()`, `api.signOut()`, `api.getCurrentUser()`
-- Keep the same context shape (`user`, `session`, `loading`, `isAdmin`, `profile`, `signOut`, `refreshProfile`)
-- Persist session in localStorage
+### 2. Rewrite `src/lib/api.ts`
+Replace localStorage/IndexedDB calls with `fetch('/api/...', { credentials: 'include' })`. Same exported function signatures so hooks and pages need zero changes.
 
-### 4. Rewrite hooks (same interfaces, different backend)
-- **`useDocuments.ts`**: Replace Supabase queries with `api.getDocuments()`, mutations with `api.uploadDocument()` etc. Keep TanStack Query for caching/invalidation.
-- **`useTags.ts`**: Replace Supabase calls with `api.getTags()` etc.
-- **`useNotes.ts`**: Replace with `api.getNote()` / `api.upsertNote()`
+### 3. Delete `src/lib/store.ts`
+No longer needed.
 
-### 5. Update pages (minimal changes)
-- **`Login.tsx`**: Call `api.login()` instead of `supabase.auth.signInWithPassword()`
-- **`Settings.tsx`**: Call `api.updatePassword()`, `api.uploadLogo()`, `api.updateProfile()`
-- **`Admin.tsx`**: Call `api.getUsers()`, `api.createUser()`, `api.updateUserRole()`
-- **`SharedDocument.tsx`**: Call `api.getSharedDocument(token)` instead of edge function
-- **`ResetPassword.tsx`**: Simplified (localStorage-based password update)
-- **`DocumentViewer.tsx`**: Use `api.getDocumentPreviewUrl()` for preview URLs
+### 4. Update `vite.config.ts`
+Add proxy: `/api` -> `http://localhost:3001` for development.
 
-### 6. Document previews (no storage service)
-- Files stored as `File`/`Blob` objects in IndexedDB via a small helper
-- Preview URLs generated with `URL.createObjectURL()`
-- PDF: iframe with blob URL
-- Images: img with blob URL
-- Text: read as text from blob
-- Other formats: file-type icon fallback (unchanged)
+### 5. Update `package.json`
+Add dependencies: `express`, `multer`, `better-sqlite3`, `cookie-parser`, `bcryptjs`.
+Add scripts: `"start": "node server.cjs"`, `"dev:server": "node server.cjs"`.
 
-### 7. Shared documents
-- Share tokens stored in the document record
-- `SharedDocument.tsx` reads from localStorage/IndexedDB directly (same origin)
-- For a real self-hosted deployment, this would hit a public API endpoint
+### 6. Update Docker setup
+**Dockerfile** (multi-stage):
+- Stage 1: Build frontend with `npm install` + `npm run build`
+- Stage 2: `node:20-alpine`, copy `dist/`, `server.cjs`, `package.json`, install production deps, expose 3001, `CMD ["node", "server.cjs"]`
 
-### 8. Keep unchanged
-- All UI components (`DocumentCard`, `DocumentListView`, `DashboardStats`, `FileTypeIcon`, `TagManager`, `TopBar`, `AppSidebar`, `RenameDialog`)
-- All shadcn/ui components
-- Routing structure
-- CSS/styling
-- TanStack Query setup
+**docker-compose.yml**: port 3000:3001, volume `./data:/app/data`.
 
-## Technical Details
+### 7. SQLite schema (auto-created on first run)
+```sql
+CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT UNIQUE, full_name TEXT,
+  role TEXT DEFAULT 'user', password_hash TEXT, accent_color TEXT,
+  avatar_url TEXT, workspace_logo_url TEXT, created_at TEXT);
 
-### Default seed data
-```typescript
-// Pre-configured admin user
-{ id: 'admin-1', email: 'admin@docmoc.local', password: 'admin', 
-  fullName: 'Admin', role: 'admin' }
+CREATE TABLE sessions (token TEXT PRIMARY KEY, user_id TEXT, created_at TEXT);
+
+CREATE TABLE documents (id TEXT PRIMARY KEY, user_id TEXT, name TEXT,
+  file_type TEXT, file_size INTEGER, storage_path TEXT, starred INTEGER DEFAULT 0,
+  trashed INTEGER DEFAULT 0, trashed_at TEXT, shared INTEGER DEFAULT 0,
+  share_token TEXT, created_at TEXT, updated_at TEXT);
+
+CREATE TABLE tags (id TEXT PRIMARY KEY, user_id TEXT, name TEXT,
+  color TEXT, created_at TEXT);
+
+CREATE TABLE document_tags (document_id TEXT, tag_id TEXT,
+  PRIMARY KEY(document_id, tag_id));
+
+CREATE TABLE notes (id TEXT PRIMARY KEY, document_id TEXT, user_id TEXT,
+  content TEXT, created_at TEXT, updated_at TEXT);
+
+CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
 ```
 
-### IndexedDB for file storage
-Using `idb-keyval` (tiny library) or raw IndexedDB API to store uploaded files as blobs, keyed by document ID. This avoids localStorage's 5MB limit.
+## Files Summary
 
-### Files to create
-- `src/lib/api.ts` — all backend operations
-- `src/lib/store.ts` — localStorage/IndexedDB persistence helpers
+| Action | File |
+|--------|------|
+| Create | `server.cjs` |
+| Rewrite | `src/lib/api.ts` |
+| Delete | `src/lib/store.ts` |
+| Edit | `package.json` |
+| Edit | `vite.config.ts` |
+| Rewrite | `Dockerfile` |
+| Edit | `docker-compose.yml` |
+| Edit | `.dockerignore` |
 
-### Files to rewrite
-- `src/contexts/AuthContext.tsx`
-- `src/hooks/useDocuments.ts`
-- `src/hooks/useTags.ts`
-- `src/hooks/useNotes.ts`
-- `src/pages/Login.tsx`
-- `src/pages/Settings.tsx`
-- `src/pages/Admin.tsx`
-- `src/pages/SharedDocument.tsx`
-- `src/pages/ResetPassword.tsx`
-- `src/components/DocumentViewer.tsx`
-- `src/components/MainLayout.tsx` (remove supabase upload ref)
-
-### Files to delete
-- `src/integrations/supabase/client.ts`
-- `src/integrations/supabase/types.ts`
-- `supabase/` directory
-- Remove `@supabase/supabase-js` and `uuid` from dependencies (use `crypto.randomUUID()` instead)
-
-## Result
-A fully working Docmoc app with all screens, flows, and interactions intact — zero external dependencies. Ready to connect to any self-hosted REST API by swapping `api.ts` implementations from localStorage to `fetch()`.
+No changes to UI components, hooks, contexts, or pages.
 
