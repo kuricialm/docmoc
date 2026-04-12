@@ -230,12 +230,8 @@ export async function toggleShare(id: string, shared: boolean): Promise<{ share_
   });
 }
 
-export async function downloadDocument(storagePath: string, fileName: string): Promise<void> {
-  // storagePath is now the doc id for the download endpoint
-  // We need the doc id, but callers pass storagePath. Extract from conventions or use blob approach.
-  // Actually, we'll use the blob endpoint with doc id. But callers pass storagePath.
-  // For simplicity, fetch the blob and trigger download.
-  const res = await fetch(`${BASE}/documents/${storagePath}/download`, { credentials: 'include' });
+export async function downloadDocument(docId: string, fileName: string): Promise<void> {
+  const res = await fetch(`${BASE}/documents/${docId}/download`, { credentials: 'include' });
   if (!res.ok) throw new Error('Download failed');
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -246,9 +242,9 @@ export async function downloadDocument(storagePath: string, fileName: string): P
   URL.revokeObjectURL(url);
 }
 
-export async function getDocumentBlob(storagePath: string): Promise<Blob | undefined> {
+export async function getDocumentBlob(docId: string): Promise<Blob | undefined> {
   try {
-    const res = await fetch(`${BASE}/documents/${storagePath}/blob`, { credentials: 'include' });
+    const res = await fetch(`${BASE}/documents/${docId}/blob`, { credentials: 'include' });
     if (!res.ok) return undefined;
     return res.blob();
   } catch {
