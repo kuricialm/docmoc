@@ -10,7 +10,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { X, Download, Share2, Copy, Star, Plus } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { X, Download, Share2, Copy, Star, Plus, UserX } from 'lucide-react';
 import FileTypeIcon from './FileTypeIcon';
 import { useDocumentMutations } from '@/hooks/useDocuments';
 import { toast } from 'sonner';
@@ -30,7 +32,9 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
   const [optimisticTags, setOptimisticTags] = useState<Document['tags']>([]);
   const [optimisticShared, setOptimisticShared] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
-  const [expiresAt, setExpiresAt] = useState('');
+  const [expiryEnabled, setExpiryEnabled] = useState(false);
+  const [expiryDate, setExpiryDate] = useState('');
+  const [expiryTime, setExpiryTime] = useState('23:59');
   const [sharePassword, setSharePassword] = useState('');
 
   // Ref-based token that survives polling resets — this is the source of truth for copy
@@ -42,9 +46,14 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
   const { data: allTags } = useTags();
   const { addTagToDocument, removeTagFromDocument } = useTagMutations();
 
-  const getLocalDateTime = () => {
-    const local = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
-    return local.toISOString().slice(0, 16);
+  const toLocalDateInput = (date: Date) => {
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 10);
+  };
+
+  const toLocalTimeInput = (date: Date) => {
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(11, 16);
   };
 
   // Resolve the best available share URL at call time
@@ -93,7 +102,18 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
       generatedTokenRef.current = doc.share_token;
     }
 
-    setExpiresAt(doc.share_expires_at ? doc.share_expires_at.slice(0, 16) : '');
+    if (doc.share_expires_at) {
+      const expiry = new Date(doc.share_expires_at);
+      setExpiryEnabled(true);
+      setExpiryDate(toLocalDateInput(expiry));
+      setExpiryTime(toLocalTimeInput(expiry));
+    } else {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setExpiryEnabled(false);
+      setExpiryDate(toLocalDateInput(tomorrow));
+      setExpiryTime('23:59');
+    }
     setSharePassword('');
   }, [doc]);
 
@@ -174,8 +194,12 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
       return;
     }
 
+    const resolvedExpiry = expiryEnabled && expiryDate
+      ? new Date(`${expiryDate}T${expiryTime || '23:59'}`).toISOString()
+      : undefined;
+
     const config = {
-      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+      expiresAt: resolvedExpiry,
       password: sharePassword || undefined,
     };
 
@@ -215,7 +239,12 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
   };
 
   const openShareSettings = () => {
-    setExpiresAt(getLocalDateTime());
+    if (!doc?.share_expires_at && !expiryDate) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setExpiryDate(toLocalDateInput(tomorrow));
+      setExpiryTime('23:59');
+    }
     setSharePassword('');
     setShareDialogOpen(true);
   };
@@ -294,29 +323,45 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
 
               <div className="p-4 sm:p-5 space-y-3 border-b border-border/30">
                 <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Actions</h3>
-                <div className="flex flex-col gap-1.5">
-                  <Button variant="outline" size="sm" className="justify-start gap-2 rounded-lg border-border/40" onClick={() => downloadDocument(doc.id, doc.name)}>
-                    <Download className="w-3.5 h-3.5" /> Download
-                  </Button>
-                  {optimisticShared ? (
-                    <>
-                      <Button variant="outline" size="sm" className="justify-start gap-2 rounded-lg border-border/40" onClick={openShareSettings}>
-                        <Share2 className="w-3.5 h-3.5" /> Edit Share Settings
-                      </Button>
-                      <Button variant="outline" size="sm" className="justify-start gap-2 rounded-lg border-border/40" onClick={handleDisableSharing}>
-                        <Share2 className="w-3.5 h-3.5" /> Disable Sharing
-                      </Button>
-                    </>
-                  ) : (
-                    <Button variant="outline" size="sm" className="justify-start gap-2 rounded-lg border-border/40" onClick={openShareSettings}>
-                      <Share2 className="w-3.5 h-3.5" /> Share Link
-                    </Button>
-                  )}
-                  {hasShareUrl && (
-                    <Button variant="ghost" size="sm" className="justify-start gap-2 text-xs text-muted-foreground rounded-lg" onClick={handleCopyLink}>
-                      <Copy className="w-3.5 h-3.5" /> Copy link
-                    </Button>
-                  )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" className="rounded-lg border-border/40" onClick={() => downloadDocument(doc.id, doc.name)} aria-label="Download">
+                          <Download className="w-3.5 h-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Download</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" className="rounded-lg border-border/40" onClick={openShareSettings} aria-label={optimisticShared ? 'Edit share settings' : 'Share link'}>
+                          <Share2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{optimisticShared ? 'Edit share settings' : 'Share link'}</TooltipContent>
+                    </Tooltip>
+                    {optimisticShared && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="outline" size="icon" className="rounded-lg border-border/40" onClick={handleDisableSharing} aria-label="Disable sharing">
+                            <UserX className="w-3.5 h-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Disable sharing</TooltipContent>
+                      </Tooltip>
+                    )}
+                    {hasShareUrl && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-muted-foreground rounded-lg" onClick={handleCopyLink} aria-label="Copy share link">
+                            <Copy className="w-3.5 h-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Copy link</TooltipContent>
+                      </Tooltip>
+                    )}
+                  </TooltipProvider>
                 </div>
               </div>
 
@@ -343,9 +388,26 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
             </div>
 
             <div className="space-y-4">
-              <div className="space-y-2 rounded-lg border border-border/50 p-3">
-                <Label htmlFor="share-expires-at">Auto-disable at</Label>
-                <Input id="share-expires-at" type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+              <div className="space-y-3 rounded-lg border border-border/50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <Label htmlFor="share-expiry-enabled">Auto-disable link</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">Turn off to keep the link active until you disable sharing.</p>
+                  </div>
+                  <Switch id="share-expiry-enabled" checked={expiryEnabled} onCheckedChange={setExpiryEnabled} />
+                </div>
+                {expiryEnabled && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="share-expires-date">Date</Label>
+                      <Input id="share-expires-date" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="share-expires-time">Time</Label>
+                      <Input id="share-expires-time" type="time" step={300} value={expiryTime} onChange={(e) => setExpiryTime(e.target.value)} />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2 rounded-lg border border-border/50 p-3">

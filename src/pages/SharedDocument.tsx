@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { FileText, Download } from 'lucide-react';
+import { FileText, Download, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getFileTypeInfo, formatFileSize, isImageType } from '@/lib/fileTypes';
@@ -17,10 +17,13 @@ export default function SharedDocument() {
   const [submittedPassword, setSubmittedPassword] = useState('');
   const [requiresPassword, setRequiresPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
 
-  const loadDocument = async (password?: string) => {
+  const loadDocument = async (password?: string, options?: { keepContentVisible?: boolean }) => {
     if (!token) return;
-    setLoading(true);
+    if (!options?.keepContentVisible) {
+      setLoading(true);
+    }
     try {
       const shared = await api.getSharedDocument(token, password || undefined);
       if (!shared) {
@@ -45,10 +48,11 @@ export default function SharedDocument() {
     } catch (e) {
       if (e instanceof Error && e.message === 'PASSWORD_REQUIRED') {
         setRequiresPassword(true);
-        setPasswordError(password ? 'Incorrect password. Please try again.' : 'This link is password protected.');
+        setPasswordError(password ? 'The password you entered is incorrect. Please try again.' : '');
       }
     } finally {
       setLoading(false);
+      setUnlocking(false);
     }
   };
 
@@ -64,15 +68,22 @@ export default function SharedDocument() {
           <h1 className="text-lg font-semibold">Password protected link</h1>
           <p className="text-sm text-muted-foreground">Enter the share password to access this document.</p>
           <Input type="password" value={sharePassword} onChange={(e) => setSharePassword(e.target.value)} placeholder="Share password" />
-          {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
+          {passwordError && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive flex items-start gap-2">
+              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <p>{passwordError}</p>
+            </div>
+          )}
           <Button
             className="w-full"
+            disabled={!sharePassword || unlocking}
             onClick={async () => {
               setSubmittedPassword(sharePassword);
-              await loadDocument(sharePassword);
+              setUnlocking(true);
+              await loadDocument(sharePassword, { keepContentVisible: true });
             }}
           >
-            Unlock document
+            {unlocking ? 'Unlocking...' : 'Unlock document'}
           </Button>
         </div>
       </div>
