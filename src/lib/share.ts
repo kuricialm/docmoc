@@ -4,8 +4,12 @@ export function getSharedDocumentUrl(token: string): string {
 
 export async function copyTextToClipboard(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall back to execCommand when Clipboard API is unavailable in the current context
+    }
   }
 
   const textarea = document.createElement('textarea');
