@@ -39,7 +39,9 @@ db.exec(`
     id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL,
     file_type TEXT, file_size INTEGER, storage_path TEXT,
     starred INTEGER DEFAULT 0, trashed INTEGER DEFAULT 0, trashed_at TEXT,
-    shared INTEGER DEFAULT 0, share_token TEXT, created_at TEXT, updated_at TEXT,
+    shared INTEGER DEFAULT 0, share_token TEXT,
+    uploaded_by_name_snapshot TEXT, shared_by_name_snapshot TEXT,
+    created_at TEXT, updated_at TEXT,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
   CREATE TABLE IF NOT EXISTS tags (
@@ -83,6 +85,8 @@ function ensureDocumentColumn(columnName, sqlDefinition) {
 ensureDocumentColumn('share_expires_at', 'share_expires_at TEXT');
 ensureDocumentColumn('share_password_hash', 'share_password_hash TEXT');
 ensureDocumentColumn('shared_by_user_id', 'shared_by_user_id TEXT');
+ensureDocumentColumn('uploaded_by_name_snapshot', 'uploaded_by_name_snapshot TEXT');
+ensureDocumentColumn('shared_by_name_snapshot', 'shared_by_name_snapshot TEXT');
 
 // Seed admin
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -546,8 +550,18 @@ app.get('/api/documents', auth, (req, res) => {
   `);
   docs = docs.map(d => {
     const { share_password_hash, ...rest } = d;
-    const uploadedByName = resolveDisplayName(rest.uploaded_by_name, req.user.full_name, req.user.email);
-    const sharedByName = resolveDisplayName(rest.shared_by_name, uploadedByName, req.user.email);
+    const uploadedByName = resolveDisplayName(
+      rest.uploaded_by_name,
+      rest.uploaded_by_name_snapshot,
+      req.user.full_name,
+      req.user.email,
+    );
+    const sharedByName = resolveDisplayName(
+      rest.shared_by_name,
+      rest.shared_by_name_snapshot,
+      uploadedByName,
+      req.user.email,
+    );
     return ({
       ...rest,
       name: normalizeUploadedFilename(rest.name),
@@ -583,13 +597,15 @@ app.post('/api/documents/upload', auth, upload.single('file'), (req, res) => {
     file_type: req.file.mimetype || 'application/octet-stream',
     file_size: req.file.size, storage_path: storagePath,
     starred: 0, trashed: 0, trashed_at: null, shared: 0, share_token: null,
+    uploaded_by_name_snapshot: resolveDisplayName(req.user.full_name, req.user.email),
+    shared_by_name_snapshot: resolveDisplayName(req.user.full_name, req.user.email),
     created_at: now(), updated_at: now(),
   };
   db.prepare(`INSERT INTO documents (id, user_id, name, file_type, file_size, storage_path,
-    starred, trashed, trashed_at, shared, share_token, created_at, updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    starred, trashed, trashed_at, shared, share_token, uploaded_by_name_snapshot, shared_by_name_snapshot, created_at, updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(doc.id, doc.user_id, doc.name, doc.file_type, doc.file_size, doc.storage_path,
-      doc.starred, doc.trashed, doc.trashed_at, doc.shared, doc.share_token, doc.created_at, doc.updated_at);
+      doc.starred, doc.trashed, doc.trashed_at, doc.shared, doc.share_token, doc.uploaded_by_name_snapshot, doc.shared_by_name_snapshot, doc.created_at, doc.updated_at);
   logDocumentEvent(doc.id, req.user.id, 'uploaded', { name: doc.name });
 
   res.json({
@@ -665,7 +681,7 @@ app.patch('/api/documents/:id/share', auth, (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Not found' });
   if (!shared) {
     if (!existing.shared) return res.json({ ok: true, share_token: null });
-    db.prepare('UPDATE documents SET shared = 0, share_token = NULL, share_expires_at = NULL, share_password_hash = NULL, shared_by_user_id = NULL, updated_at = ? WHERE id = ? AND user_id = ?')
+    db.prepare('UPDATE documents SET shared = 0, share_token = NULL, share_expires_at = NULL, share_password_hash = NULL, shared_by_user_id = NULL, shared_by_name_snapshot = NULL, updated_at = ? WHERE id = ? AND user_id = ?')
       .run(now(), req.params.id, req.user.id);
     logDocumentEvent(req.params.id, req.user.id, 'share_disabled');
     return res.json({ ok: true, share_token: null });
@@ -703,8 +719,8 @@ app.patch('/api/documents/:id/share', auth, (req, res) => {
   }
 
   const shareToken = existing.share_token || uid();
-  db.prepare('UPDATE documents SET shared = 1, share_token = ?, share_expires_at = ?, share_password_hash = ?, shared_by_user_id = ?, updated_at = ? WHERE id = ? AND user_id = ?')
-    .run(shareToken, shareExpiresAt, sharePasswordHash, req.user.id, now(), req.params.id, req.user.id);
+  db.prepare('UPDATE documents SET shared = 1, share_token = ?, share_expires_at = ?, share_password_hash = ?, shared_by_user_id = ?, shared_by_name_snapshot = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+    .run(shareToken, shareExpiresAt, sharePasswordHash, req.user.id, resolveDisplayName(req.user.full_name, req.user.email), now(), req.params.id, req.user.id);
   logDocumentEvent(req.params.id, req.user.id, existing.share_token ? 'share_updated' : 'share_enabled', { expiresAt: shareExpiresAt });
   if (expiryChanged) {
     logDocumentEvent(req.params.id, req.user.id, 'share_expiry_changed', {
@@ -910,8 +926,8 @@ app.get('/api/shared/:token', (req, res) => {
     SELECT t.id, t.name, t.color FROM tags t
     JOIN document_tags dt ON dt.tag_id = t.id WHERE dt.document_id = ?
   `).all(doc.id);
-  const uploadedByName = resolveDisplayName(doc.uploaded_by_name);
-  const sharedByName = resolveDisplayName(doc.shared_by_name, uploadedByName);
+  const uploadedByName = resolveDisplayName(doc.uploaded_by_name, doc.uploaded_by_name_snapshot);
+  const sharedByName = resolveDisplayName(doc.shared_by_name, doc.shared_by_name_snapshot, uploadedByName);
   res.json({
     ...doc,
     name: normalizeUploadedFilename(doc.name),
