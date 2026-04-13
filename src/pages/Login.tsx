@@ -97,9 +97,6 @@ export default function Login() {
           {!settings.registration_enabled && !registerMode && (
             <p className="text-xs text-muted-foreground">Registration is disabled. Contact an administrator.</p>
           )}
-          {!registerMode && (
-            <p className="text-xs text-muted-foreground mt-2">Default: admin@docmoc.local / admin</p>
-          )}
         </div>
       </div>
     </div>
