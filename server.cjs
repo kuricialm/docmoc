@@ -100,19 +100,25 @@ function normalizeUploadedFilename(filename) {
   const arabicRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g;
   const mojibakeRegex = /[ÃØÙÐÑ][\u0080-\u00FF]?/g;
   const matchCount = (value, regex) => (value.match(regex) || []).length;
+  const replacementCount = (value) => (value.match(/�/g) || []).length;
+  const printableCount = (value) => (value.match(/[\p{L}\p{N}\s._\-()[\]]/gu) || []).length;
+  const decodeLatin1ToUtf8 = (value) => Buffer.from(value, 'latin1').toString('utf8');
 
-  const utf8Candidate = Buffer.from(trimmed, 'latin1').toString('utf8');
-  const originalArabic = matchCount(trimmed, arabicRegex);
-  const decodedArabic = matchCount(utf8Candidate, arabicRegex);
-  const originalMojibake = matchCount(trimmed, mojibakeRegex);
-  const decodedMojibake = matchCount(utf8Candidate, mojibakeRegex);
+  const candidates = [trimmed];
+  const firstPass = decodeLatin1ToUtf8(trimmed);
+  candidates.push(firstPass);
+  const secondPass = decodeLatin1ToUtf8(firstPass);
+  if (secondPass !== firstPass) candidates.push(secondPass);
 
-  const decodeLooksBetter = (
-    decodedArabic > originalArabic ||
-    (decodedArabic > 0 && decodedMojibake < originalMojibake)
+  const score = (value) => (
+    matchCount(value, arabicRegex) * 4 +
+    printableCount(value) -
+    matchCount(value, mojibakeRegex) * 3 -
+    replacementCount(value) * 6
   );
 
-  return decodeLooksBetter ? utf8Candidate : trimmed;
+  const best = candidates.sort((a, b) => score(b) - score(a))[0];
+  return best || 'document';
 }
 
 function isValidPassword(password) {
@@ -454,6 +460,7 @@ app.get('/api/documents', auth, (req, res) => {
     const { share_password_hash, ...rest } = d;
     return ({
     ...rest,
+    name: normalizeUploadedFilename(rest.name),
     starred: !!d.starred,
     trashed: !!d.trashed,
     shared: !!d.shared,
@@ -492,7 +499,7 @@ app.post('/api/documents/upload', auth, upload.single('file'), (req, res) => {
     .run(doc.id, doc.user_id, doc.name, doc.file_type, doc.file_size, doc.storage_path,
       doc.starred, doc.trashed, doc.trashed_at, doc.shared, doc.share_token, doc.created_at, doc.updated_at);
 
-  res.json({ ...doc, starred: false, trashed: false, shared: false, tags: [], tag_ids: [] });
+  res.json({ ...doc, name: normalizeUploadedFilename(doc.name), starred: false, trashed: false, shared: false, tags: [], tag_ids: [] });
 });
 
 app.patch('/api/documents/:id/rename', auth, (req, res) => {
@@ -569,7 +576,8 @@ app.get('/api/documents/:id/download', auth, (req, res) => {
   const doc = db.prepare('SELECT * FROM documents WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!doc) return res.status(404).json({ error: 'Not found' });
   const filePath = path.join(DATA_DIR, doc.storage_path);
-  res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+  const safeName = normalizeUploadedFilename(doc.name);
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
   res.setHeader('Content-Type', doc.file_type);
   res.sendFile(filePath);
 });
@@ -664,7 +672,7 @@ app.get('/api/shared/:token', (req, res) => {
     SELECT t.id, t.name, t.color FROM tags t
     JOIN document_tags dt ON dt.tag_id = t.id WHERE dt.document_id = ?
   `).all(doc.id);
-  res.json({ ...doc, starred: !!doc.starred, trashed: false, shared: true, tags });
+  res.json({ ...doc, name: normalizeUploadedFilename(doc.name), starred: !!doc.starred, trashed: false, shared: true, tags });
 });
 
 app.get('/api/shared/:token/download', (req, res) => {
