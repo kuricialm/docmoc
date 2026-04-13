@@ -87,7 +87,6 @@ ensureDocumentColumn('share_password_hash', 'share_password_hash TEXT');
 ensureDocumentColumn('shared_by_user_id', 'shared_by_user_id TEXT');
 ensureDocumentColumn('uploaded_by_name_snapshot', 'uploaded_by_name_snapshot TEXT');
 ensureDocumentColumn('shared_by_name_snapshot', 'shared_by_name_snapshot TEXT');
-backfillDocumentIdentitySnapshots();
 
 // Seed admin
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -157,39 +156,6 @@ function resolveDisplayName(...candidates) {
     if (trimmed) return trimmed;
   }
   return 'Unknown user';
-}
-
-function backfillDocumentIdentitySnapshots() {
-  db.prepare(`
-    UPDATE documents AS d
-    SET uploaded_by_name_snapshot = (
-      SELECT COALESCE(NULLIF(TRIM(u.full_name), ''), u.email, 'Unknown user')
-      FROM users u
-      WHERE u.id = d.user_id
-    )
-    WHERE uploaded_by_name_snapshot IS NULL
-       OR TRIM(uploaded_by_name_snapshot) = ''
-       OR TRIM(uploaded_by_name_snapshot) = 'Unknown user'
-  `).run();
-
-  db.prepare(`
-    UPDATE documents AS d
-    SET shared_by_name_snapshot = COALESCE(
-      (
-        SELECT COALESCE(NULLIF(TRIM(u.full_name), ''), u.email, NULL)
-        FROM users u
-        WHERE u.id = COALESCE(d.shared_by_user_id, d.user_id)
-      ),
-      uploaded_by_name_snapshot,
-      'Unknown user'
-    )
-    WHERE d.shared = 1
-      AND (
-        d.shared_by_name_snapshot IS NULL
-        OR TRIM(d.shared_by_name_snapshot) = ''
-        OR TRIM(d.shared_by_name_snapshot) = 'Unknown user'
-      )
-  `).run();
 }
 
 function getWorkspaceLogoUrl() {
@@ -576,16 +542,8 @@ app.get('/api/documents', auth, (req, res) => {
   `);
   docs = docs.map(d => {
     const { share_password_hash, ...rest } = d;
-    const uploadedByName = resolveDisplayName(
-      rest.uploaded_by_name_snapshot,
-      req.user.full_name,
-      req.user.email,
-    );
-    const sharedByName = resolveDisplayName(
-      rest.shared_by_name_snapshot,
-      uploadedByName,
-      req.user.email,
-    );
+    const uploadedByName = resolveDisplayName(req.user.full_name, req.user.email);
+    const sharedByName = resolveDisplayName(rest.shared_by_name_snapshot, req.user.full_name, req.user.email);
     return ({
       ...rest,
       name: normalizeUploadedFilename(rest.name),
@@ -751,7 +709,6 @@ app.patch('/api/documents/:id/share', auth, (req, res) => {
         share_password_hash = ?,
         shared_by_user_id = ?,
         shared_by_name_snapshot = ?,
-        uploaded_by_name_snapshot = COALESCE(NULLIF(TRIM(uploaded_by_name_snapshot), ''), ?),
         updated_at = ?
     WHERE id = ? AND user_id = ?
   `).run(
@@ -759,7 +716,6 @@ app.patch('/api/documents/:id/share', auth, (req, res) => {
     shareExpiresAt,
     sharePasswordHash,
     req.user.id,
-    resolveDisplayName(req.user.full_name, req.user.email),
     resolveDisplayName(req.user.full_name, req.user.email),
     now(),
     req.params.id,
@@ -971,7 +927,7 @@ app.get('/api/shared/:token', (req, res) => {
     JOIN document_tags dt ON dt.tag_id = t.id WHERE dt.document_id = ?
   `).all(doc.id);
   const uploadedByName = resolveDisplayName(doc.uploaded_by_name_snapshot);
-  const sharedByName = resolveDisplayName(doc.shared_by_name_snapshot, uploadedByName);
+  const sharedByName = resolveDisplayName(doc.shared_by_name_snapshot);
   res.json({
     ...doc,
     name: normalizeUploadedFilename(doc.name),

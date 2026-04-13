@@ -20,7 +20,6 @@ import { copyTextToClipboard, getSharedDocumentUrl } from '@/lib/share';
 import { hasArabicCharacters } from '@/lib/text';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
-import { resolveDisplayName } from '@/lib/identity';
 
 type Props = {
   document: Document | null;
@@ -301,7 +300,7 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
   };
 
   const hasShareUrl = !!resolveShareUrl();
-  const uploadedByLabel = resolveDisplayName(doc.uploaded_by_name, profile?.full_name, profile?.email);
+  const uploadedByLabel = doc.uploaded_by_name || profile?.full_name || profile?.email || 'Unknown user';
   const formatDateTime = (v: string) => new Date(v).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
   const getHistoryLabel = (action: string, details: Record<string, unknown> | null) => {
     const map: Record<string, string> = {

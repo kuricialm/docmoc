@@ -100,7 +100,7 @@ export default function SharedDocument() {
   if (!doc) return <div className="min-h-screen flex items-center justify-center"><p className="text-muted-foreground text-sm">Document not found or no longer shared</p></div>;
 
   const typeInfo = getFileTypeInfo(doc.file_type);
-  const sharedByName = resolveDisplayName(doc.shared_by_name, doc.uploaded_by_name);
+  const sharedByName = doc.shared_by_name || 'Unknown user';
 
   const handleDownload = async () => {
     try {
@@ -145,7 +145,7 @@ export default function SharedDocument() {
             <h1 className={cn('font-semibold', hasArabicCharacters(doc.name) && 'font-arabic-text')}>
               {doc.name}
             </h1>
-            <p className="text-xs text-muted-foreground">{typeInfo.label} — {formatFileSize(doc.file_size)}</p>
+            <p className="text-xs text-muted-foreground">{typeInfo.label} - {formatFileSize(doc.file_size)} · Shared by {sharedByName}</p>
           </div>
         </div>
         <div className="rounded-xl border bg-card px-4 py-3 text-sm">
