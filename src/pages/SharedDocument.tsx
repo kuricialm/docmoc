@@ -10,6 +10,7 @@ import { useTheme } from 'next-themes';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { hasArabicCharacters } from '@/lib/text';
+import { resolveDisplayName } from '@/lib/identity';
 
 export default function SharedDocument() {
   const { token } = useParams<{ token: string }>();
@@ -145,6 +146,12 @@ export default function SharedDocument() {
               {doc.name}
             </h1>
             <p className="text-xs text-muted-foreground">{typeInfo.label} - {formatFileSize(doc.file_size)} · Shared by {sharedByName}</p>
+          </div>
+        </div>
+        <div className="rounded-xl border bg-card px-4 py-3 text-sm">
+          <div className="flex justify-between gap-3">
+            <span className="text-muted-foreground">Shared by</span>
+            <span className="text-right">{sharedByName}</span>
           </div>
         </div>
         <div className="bg-card border rounded-xl overflow-hidden min-h-[60vh] flex items-center justify-center">
