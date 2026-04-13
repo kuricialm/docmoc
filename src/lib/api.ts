@@ -234,7 +234,6 @@ export async function permanentDelete(id: string, _storagePath: string): Promise
 }
 
 export type ShareConfig = {
-  mode: 'public' | 'expires' | 'password';
   expiresAt?: string;
   password?: string;
 };

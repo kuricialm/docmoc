@@ -483,15 +483,17 @@ app.patch('/api/documents/:id/share', auth, (req, res) => {
 
   let shareExpiresAt = null;
   let sharePasswordHash = null;
-  if (config?.mode === 'expires') {
-    const parsedDate = new Date(config?.expiresAt);
+
+  if (config?.expiresAt) {
+    const parsedDate = new Date(config.expiresAt);
     if (Number.isNaN(parsedDate.getTime()) || parsedDate.getTime() <= Date.now()) {
       return res.status(400).json({ error: 'Expiration must be a future date/time' });
     }
     shareExpiresAt = parsedDate.toISOString();
   }
-  if (config?.mode === 'password') {
-    if (typeof config?.password !== 'string' || config.password.length < 4) {
+
+  if (config?.password) {
+    if (typeof config.password !== 'string' || config.password.length < 4) {
       return res.status(400).json({ error: 'Password must be at least 4 characters' });
     }
     sharePasswordHash = bcrypt.hashSync(config.password, 10);
