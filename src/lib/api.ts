@@ -46,6 +46,8 @@ export type NoteRecord = {
 
 export type AppSettings = {
   registration_enabled: boolean;
+  workspace_logo_url?: string | null;
+  workspace_favicon_url?: string | null;
 };
 
 // ---------- Fetch helper ----------
@@ -336,6 +338,25 @@ export async function uploadLogo(_userId: string, file: File): Promise<string> {
 
 export async function removeLogo(_userId: string): Promise<void> {
   await apiFetch('/profile/logo', {
+    method: 'DELETE',
+  });
+}
+
+export async function uploadFavicon(_userId: string, file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`${BASE}/profile/favicon`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+  if (!res.ok) throw new Error('Favicon upload failed');
+  const data = await res.json();
+  return data.url;
+}
+
+export async function removeFavicon(_userId: string): Promise<void> {
+  await apiFetch('/profile/favicon', {
     method: 'DELETE',
   });
 }

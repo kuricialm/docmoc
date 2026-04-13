@@ -86,6 +86,16 @@ function isValidPassword(password) {
   return typeof password === 'string' && password.length >= 4;
 }
 
+function getWorkspaceLogoUrl() {
+  const row = db.prepare("SELECT value FROM settings WHERE key='workspace_logo_url'").get();
+  return row ? row.value : null;
+}
+
+function getWorkspaceFaviconUrl() {
+  const row = db.prepare("SELECT value FROM settings WHERE key='workspace_favicon_url'").get();
+  return row ? row.value : null;
+}
+
 function extFromMime(mime) {
   const map = {
     'application/pdf': 'pdf', 'text/plain': 'txt', 'text/csv': 'csv',
@@ -131,6 +141,7 @@ function auth(req, res, next) {
   if (!session) return res.status(401).json({ error: 'Invalid session' });
   const user = db.prepare('SELECT id, email, full_name, role, accent_color, avatar_url, workspace_logo_url, created_at FROM users WHERE id = ?').get(session.user_id);
   if (!user) return res.status(401).json({ error: 'User not found' });
+  user.workspace_logo_url = getWorkspaceLogoUrl();
   req.user = user;
   next();
 }
@@ -158,7 +169,7 @@ app.post('/api/auth/login', (req, res) => {
   const cookieOpts = { httpOnly: true, sameSite: 'lax', path: '/' };
   if (maxAge) cookieOpts.maxAge = maxAge;
   res.cookie('session', token, cookieOpts);
-  res.json({ id: user.id, email: user.email, fullName: user.full_name, role: user.role, accentColor: user.accent_color, avatarUrl: user.avatar_url, workspaceLogoUrl: user.workspace_logo_url });
+  res.json({ id: user.id, email: user.email, fullName: user.full_name, role: user.role, accentColor: user.accent_color, avatarUrl: user.avatar_url, workspaceLogoUrl: getWorkspaceLogoUrl() });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -248,33 +259,29 @@ app.patch('/api/profile/email', auth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/profile/logo', auth, upload.single('file'), (req, res) => {
+app.post('/api/profile/logo', auth, adminOnly, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file' });
   const ext = extFromMime(req.file.mimetype);
   const logoDir = path.join(DATA_DIR, 'logos');
   fs.mkdirSync(logoDir, { recursive: true });
   for (const file of fs.readdirSync(logoDir)) {
-    if (file.startsWith(`${req.user.id}.`)) {
-      fs.rmSync(path.join(logoDir, file), { force: true });
-    }
+    fs.rmSync(path.join(logoDir, file), { force: true });
   }
-  const logoPath = path.join(logoDir, `${req.user.id}.${ext}`);
+  const logoPath = path.join(logoDir, `workspace.${ext}`);
   fs.renameSync(req.file.path, logoPath);
-  const url = `/api/profile/logo/${req.user.id}.${ext}`;
-  db.prepare('UPDATE users SET workspace_logo_url = ? WHERE id = ?').run(url, req.user.id);
+  const url = `/api/profile/logo/workspace.${ext}`;
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('workspace_logo_url', ?)").run(url);
   res.json({ url });
 });
 
-app.delete('/api/profile/logo', auth, (req, res) => {
+app.delete('/api/profile/logo', auth, adminOnly, (req, res) => {
   const logoDir = path.join(DATA_DIR, 'logos');
   if (fs.existsSync(logoDir)) {
     for (const file of fs.readdirSync(logoDir)) {
-      if (file.startsWith(`${req.user.id}.`)) {
-        fs.rmSync(path.join(logoDir, file), { force: true });
-      }
+      fs.rmSync(path.join(logoDir, file), { force: true });
     }
   }
-  db.prepare('UPDATE users SET workspace_logo_url = NULL WHERE id = ?').run(req.user.id);
+  db.prepare("DELETE FROM settings WHERE key = 'workspace_logo_url'").run();
   res.json({ ok: true });
 });
 
@@ -284,11 +291,44 @@ app.get('/api/profile/logo/:filename', (req, res) => {
   res.sendFile(logoPath);
 });
 
+app.post('/api/profile/favicon', auth, adminOnly, upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file' });
+  const ext = extFromMime(req.file.mimetype);
+  const faviconDir = path.join(DATA_DIR, 'favicons');
+  fs.mkdirSync(faviconDir, { recursive: true });
+  for (const file of fs.readdirSync(faviconDir)) {
+    fs.rmSync(path.join(faviconDir, file), { force: true });
+  }
+  const faviconPath = path.join(faviconDir, `workspace.${ext}`);
+  fs.renameSync(req.file.path, faviconPath);
+  const url = `/api/profile/favicon/workspace.${ext}`;
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('workspace_favicon_url', ?)").run(url);
+  res.json({ url });
+});
+
+app.delete('/api/profile/favicon', auth, adminOnly, (req, res) => {
+  const faviconDir = path.join(DATA_DIR, 'favicons');
+  if (fs.existsSync(faviconDir)) {
+    for (const file of fs.readdirSync(faviconDir)) {
+      fs.rmSync(path.join(faviconDir, file), { force: true });
+    }
+  }
+  db.prepare("DELETE FROM settings WHERE key = 'workspace_favicon_url'").run();
+  res.json({ ok: true });
+});
+
+app.get('/api/profile/favicon/:filename', (req, res) => {
+  const faviconPath = path.join(DATA_DIR, 'favicons', req.params.filename);
+  if (!fs.existsSync(faviconPath)) return res.status(404).json({ error: 'Not found' });
+  res.sendFile(faviconPath);
+});
+
 // ── Settings ──
 app.get('/api/settings', (req, res) => {
   const rows = db.prepare('SELECT key, value FROM settings').all();
   const settings = {};
-  for (const r of rows) settings[r.key] = r.value === 'true' ? true : r.value === 'false' ? false : r.value;
+  for (const r of rows) settings[r.key] = r.value === 'true' ? true : r.value === 'false' ? false : r.value === 'null' ? null : r.value;
+  settings.workspace_favicon_url = getWorkspaceFaviconUrl();
   res.json(settings);
 });
 

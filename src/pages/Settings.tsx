@@ -9,9 +9,14 @@ import { toast } from 'sonner';
 import { ImageOff } from 'lucide-react';
 
 const ACCENT_COLORS = ['#000000', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#EF4444', '#F59E0B', '#22C55E', '#06B6D4'];
+const Section = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+  <section className={`bg-background border border-border rounded-xl p-5 sm:p-6 space-y-4 hover:border-border/80 transition-colors duration-150 ${className}`}>
+    {children}
+  </section>
+);
 
 export default function SettingsPage() {
-  const { user, profile, refreshProfile, isAdmin, signOut } = useAuth();
+  const { user, profile, refreshProfile, isAdmin, signOut, appSettings, refreshSettings } = useAuth();
 
   const [newPassword, setNewPassword] = useState('');
   const [newEmail, setNewEmail] = useState(user?.email ?? '');
@@ -19,6 +24,8 @@ export default function SettingsPage() {
   const [emailLoading, setEmailLoading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoRemoving, setLogoRemoving] = useState(false);
+  const [faviconUploading, setFaviconUploading] = useState(false);
+  const [faviconRemoving, setFaviconRemoving] = useState(false);
   const [registrationEnabled, setRegistrationEnabled] = useState(true);
 
   useEffect(() => { setNewEmail(user?.email ?? ''); }, [user?.email]);
@@ -60,11 +67,11 @@ export default function SettingsPage() {
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !user || !isAdmin) return;
     setLogoUploading(true);
     try {
       await api.uploadLogo(user.id, file);
-      refreshProfile();
+      await refreshSettings();
       toast.success('Logo updated');
     } catch { toast.error('Failed to upload logo'); }
     setLogoUploading(false);
@@ -80,16 +87,43 @@ export default function SettingsPage() {
   };
 
   const handleLogoRemove = async () => {
-    if (!user) return;
+    if (!user || !isAdmin) return;
     setLogoRemoving(true);
     try {
       await api.removeLogo(user.id);
-      await refreshProfile();
+      await refreshSettings();
       toast.success('Logo removed');
     } catch {
       toast.error('Failed to remove logo');
     }
     setLogoRemoving(false);
+  };
+
+  const handleFaviconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !isAdmin) return;
+    setFaviconUploading(true);
+    try {
+      await api.uploadFavicon(user.id, file);
+      await refreshSettings();
+      toast.success('Favicon updated');
+    } catch {
+      toast.error('Failed to upload favicon');
+    }
+    setFaviconUploading(false);
+  };
+
+  const handleFaviconRemove = async () => {
+    if (!user || !isAdmin) return;
+    setFaviconRemoving(true);
+    try {
+      await api.removeFavicon(user.id);
+      await refreshSettings();
+      toast.success('Favicon removed');
+    } catch {
+      toast.error('Failed to remove favicon');
+    }
+    setFaviconRemoving(false);
   };
 
   const handleRegistrationToggle = async (enabled: boolean) => {
@@ -99,12 +133,6 @@ export default function SettingsPage() {
       toast.success(enabled ? 'Registration enabled' : 'Registration disabled');
     } catch { toast.error('Failed to update setting'); }
   };
-
-  const Section = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
-    <section className={`bg-background border border-border rounded-xl p-5 sm:p-6 space-y-4 hover:border-border/80 transition-colors duration-150 ${className}`}>
-      {children}
-    </section>
-  );
 
   return (
     <div className="max-w-2xl space-y-5 animate-page-in">
@@ -150,27 +178,47 @@ export default function SettingsPage() {
         </form>
       </Section>
 
-      <Section>
-        <h3 className="text-sm font-semibold">Workspace Logo</h3>
-        <div className="flex items-center gap-4">
-          {profile?.workspace_logo_url ? (
-            <img src={profile.workspace_logo_url} alt="Logo" className="w-12 h-12 rounded-xl object-cover border border-border" />
-          ) : (
-            <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
-              <ImageOff className="w-5 h-5" />
+      {isAdmin && (
+        <Section>
+          <h3 className="text-sm font-semibold">Workspace Logo</h3>
+          <div className="flex items-center gap-4">
+            {appSettings.workspace_logo_url ? (
+              <img src={appSettings.workspace_logo_url} alt="Logo" className="w-12 h-12 rounded-xl object-cover border border-border" />
+            ) : (
+              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center text-muted-foreground">
+                <ImageOff className="w-5 h-5" />
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" id="logo-upload" />
+              <Button variant="outline" size="sm" className="rounded-lg" onClick={() => document.getElementById('logo-upload')?.click()} disabled={logoUploading}>
+                {logoUploading ? 'Uploading...' : 'Upload Logo'}
+              </Button>
+              <Button variant="ghost" size="sm" className="rounded-lg" onClick={handleLogoRemove} disabled={!appSettings.workspace_logo_url || logoRemoving}>
+                {logoRemoving ? 'Removing...' : 'Remove Logo'}
+              </Button>
             </div>
-          )}
-          <div className="flex items-center gap-2">
-            <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" id="logo-upload" />
-            <Button variant="outline" size="sm" className="rounded-lg" onClick={() => document.getElementById('logo-upload')?.click()} disabled={logoUploading}>
-              {logoUploading ? 'Uploading...' : 'Upload Logo'}
-            </Button>
-            <Button variant="ghost" size="sm" className="rounded-lg" onClick={handleLogoRemove} disabled={!profile?.workspace_logo_url || logoRemoving}>
-              {logoRemoving ? 'Removing...' : 'Remove Logo'}
-            </Button>
           </div>
-        </div>
-      </Section>
+          <div className="pt-2 border-t border-border/60 flex items-center gap-4">
+            {appSettings.workspace_favicon_url ? (
+              <img src={appSettings.workspace_favicon_url} alt="Favicon" className="w-8 h-8 rounded object-cover border border-border" />
+            ) : (
+              <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-muted-foreground">
+                <ImageOff className="w-4 h-4" />
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <input type="file" accept="image/x-icon,image/png,image/svg+xml,image/*" onChange={handleFaviconUpload} className="hidden" id="favicon-upload" />
+              <Button variant="outline" size="sm" className="rounded-lg" onClick={() => document.getElementById('favicon-upload')?.click()} disabled={faviconUploading}>
+                {faviconUploading ? 'Uploading...' : 'Upload Favicon'}
+              </Button>
+              <Button variant="ghost" size="sm" className="rounded-lg" onClick={handleFaviconRemove} disabled={!appSettings.workspace_favicon_url || faviconRemoving}>
+                {faviconRemoving ? 'Removing...' : 'Remove Favicon'}
+              </Button>
+            </div>
+          </div>
+        </Section>
+      )}
 
       <Section>
         <h3 className="text-sm font-semibold">Accent Color</h3>
