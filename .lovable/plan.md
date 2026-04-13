@@ -1,119 +1,58 @@
 
-Goal: fully fix the runtime-data tracking issue and give you cleaned-up standard prompts that prevent it in future self-hosted Lovable apps.
 
-What I found
-- `.gitignore` does not currently include `data/`.
-- `.dockerignore` already does include `data/`.
-- That is why `git pull` still brings in `data/uploads/...pdf`: Git is still tracking runtime files in the repo, and `.dockerignore` does not affect Git tracking.
+## Thumbnail Preview on Document Cards
 
-Why this is happening
-- Ignoring a path only works for untracked files.
-- Because `data/` was already committed, Git will keep syncing it until it is removed from the index.
+### What you want
+- For previewable documents (PDFs, images), show the first page / image as a visual thumbnail in the card's top area (like your screenshot showing the McKinsey PDF cover page).
+- For non-previewable documents (DOCX, XLSX, etc.), keep the current icon display.
+- A toggle in Settings to enable/disable thumbnail previews.
 
-Plan
-1. Update `.gitignore`
-- Add a clear runtime-data exclusion:
-```gitignore
-data/
-```
+### Feasibility
 
-2. Keep `.dockerignore` aligned
-- Confirm `data/` remains excluded there so runtime files are not baked into Docker images.
+**Images (PNG, JPG, GIF, WEBP, SVG)** -- Straightforward. The existing `/api/documents/:id/blob` endpoint already serves the file. The card can render an `<img>` tag with `object-fit: cover` using a blob URL. No server changes needed.
 
-3. Remove tracked runtime files from Git
-- The repo must be cleaned so `data/uploads/...pdf` stops appearing in pulls.
-- Required cleanup step:
-```bash
-git rm -r --cached data
-git commit -m "Stop tracking runtime data directory"
-git push
-```
+**PDFs** -- This is the main challenge. Two approaches:
 
-4. Give you the final refined prompts
-- Keep them very close to your originals.
-- Add only the backend requirements we learned are critical:
-  - `server.cjs`
-  - proxy-aware cookie sessions
-  - `app.set('trust proxy', 1)`
-  - Vite dev proxy forwarding `x-forwarded-proto: 'https'`
-  - `/auth/me` verification after login
-  - `VITE_USE_EXTERNAL_BACKEND=true`
-  - `data/` must be excluded from both `.gitignore` and `.dockerignore`
+1. **Client-side with pdfjs** (recommended): Use `pdfjs-dist` in the browser to render the first page of a PDF to a canvas, then use the canvas as the thumbnail. This is how most web document managers do it. No server changes needed. Trade-off: adds ~300KB to the bundle (pdfjs worker), and there's a small rendering delay per card.
 
-Updated Prompt 1 — Rebuild
-```text
-Rebuild [App Name] without Supabase and without any hosted backend dependency.
+2. **Server-side thumbnail generation**: Generate a thumbnail image on upload using a library like `pdf-poppler` or `sharp` + `pdf2pic` on the backend. Store the thumbnail alongside the file. Faster at display time but requires server-side dependencies (poppler/ghostscript) which complicates Docker setup.
 
-I want [App Name] to be designed for a minimal self-hosted architecture
-from the start. Focus on the frontend UI, UX, pages, and complete app
-flows, but do not build the app around Supabase auth, Supabase database,
-or Supabase storage.
+**Recommendation**: Client-side pdfjs. It keeps the backend simple, works with existing uploads (no migration), and the thumbnails can be cached in memory or localStorage.
 
-Keep the architecture suitable for a simple self-hosted backend (Express +
-SQLite) with local file storage. Do not introduce managed backend services
-or platform-specific infrastructure.
+**Text files** -- Could render a few lines of text as a mini preview, but the visual impact is minimal. Suggest keeping the icon for these.
 
-The app must still feel fully functional in structure and flow, but the
-implementation should stay portable and easy to connect to a minimal
-self-hosted backend later.
+### Plan
 
-Prioritize:
-- premium minimal UI/UX
-- complete screens and flows
-- no emojis
-- no fake controls
+#### 1. Add `pdfjs-dist` dependency
+Install `pdfjs-dist` for client-side PDF rendering.
 
-Backend & Auth requirements (critical for Lovable preview + Docker):
-- Use server.cjs (CommonJS) for the backend entry point.
-- Cookie-based sessions (httpOnly, path: '/').
-- Add app.set('trust proxy', 1) in Express.
-- Cookies must be proxy-aware: detect secure context via req.secure OR
-  x-forwarded-proto header. Use sameSite:'none' + secure:true when HTTPS
-  detected, fall back to sameSite:'lax' for plain HTTP.
-- Vite dev proxy must forward x-forwarded-proto:'https' header to the
-  backend so cookies work correctly in Lovable's preview iframe.
-- After login, verify session with /auth/me before treating user as
-  authenticated. If verification fails, show a clear error instead of
-  entering a half-logged-in state.
-- Auto-start the backend in dev via a Vite plugin (configureServer hook).
-- Support VITE_USE_EXTERNAL_BACKEND=true to skip auto-starting the backend.
+#### 2. Create `DocumentThumbnail` component
+A new component that:
+- For images: fetches the blob and renders `<img>` with `object-cover`
+- For PDFs: fetches the blob, renders first page to a hidden canvas via pdfjs, displays the result
+- For other types: falls back to `FileTypeIcon`
+- Shows a skeleton/shimmer while loading
+- Caches blob URLs in a simple in-memory map to avoid re-fetching on every render
 
-Data directory:
-- All runtime data (database, uploads) must go in a data/ directory.
-- Add data/ to both .gitignore and .dockerignore so runtime files are
-  never committed to the repo or baked into Docker images.
+#### 3. Update `DocumentCard`
+Replace the static `FileTypeIcon` area with `DocumentThumbnail` when thumbnails are enabled. Pass a `thumbnailsEnabled` prop (from settings context or localStorage).
 
-Do not use Supabase.
-Do not assume a hosted backend.
-Keep everything portable and simple.
-```
+#### 4. Add Settings toggle
+Add a "Thumbnail Previews" switch in the Settings page under a new "Display" section. Store the preference in localStorage (no backend change needed -- it's a per-device UI preference).
 
-Updated Prompt 2 — Dockerize
-```text
-Dockerize this project based on its current working codebase.
+#### 5. Create a settings context/hook
+A small `useSettings` hook that reads/writes `localStorage` for the thumbnail toggle, so all pages can access it.
 
-Requirements:
-- Generate a production-ready Dockerfile
-- Generate docker-compose.yml with volume mount for persistent data
-- Generate .dockerignore (must include data/ to exclude runtime files)
-- Confirm .gitignore includes data/ so uploads and database are never
-  committed to the repo
-- Use npm install, not npm ci, in the Dockerfile
-- Make sure server.cjs is used (CommonJS) for the Express backend
-- Make sure Express, better-sqlite3, and all runtime deps are in
-  package.json dependencies (not devDependencies)
-- Keep the setup minimal, clean, and working
-- Do not reintroduce Supabase or any hosted backend dependency
-- Do not restructure the app unnecessarily
-- Do not change working code unless required for Docker
-- The cookie/session system must remain proxy-aware (sameSite/secure
-  detection already in server.cjs) so it works behind reverse proxies
+### Files to create/modify
+- **New**: `src/components/DocumentThumbnail.tsx` -- thumbnail renderer
+- **New**: `src/hooks/useLocalSettings.ts` -- localStorage-backed display preferences
+- **Modified**: `src/components/DocumentCard.tsx` -- use `DocumentThumbnail` instead of `FileTypeIcon` in the preview area
+- **Modified**: `src/pages/Settings.tsx` -- add thumbnail toggle
+- **Modified**: `package.json` -- add `pdfjs-dist`
 
-After generating the files, briefly explain the install, build, and
-run commands used.
-```
+### Technical notes
+- pdfjs worker will be loaded from CDN or bundled via Vite
+- Thumbnail canvas size: ~400x300px (enough for card display, small memory footprint)
+- Blob URLs will be revoked on component unmount to prevent memory leaks
+- The 1-second polling `refetchInterval` on documents won't cause re-renders of thumbnails thanks to the cache
 
-Expected result after implementation
-- Future pulls will no longer include uploaded PDFs or database files.
-- Runtime data will stay on disk/NAS only.
-- Your standard rebuild and Docker prompts will explicitly guard against this issue going forward.
