@@ -94,6 +94,15 @@ db.exec(`
   WHERE (shared_by_name IS NULL OR TRIM(shared_by_name) = '')
     AND shared_by_name_snapshot IS NOT NULL
 `);
+db.exec(`
+  UPDATE documents
+  SET shared_by_name = (
+    SELECT COALESCE(NULLIF(TRIM(u.full_name), ''), NULLIF(TRIM(u.email), ''))
+    FROM users u
+    WHERE u.id = COALESCE(documents.shared_by_user_id, documents.user_id)
+  )
+  WHERE (shared_by_name IS NULL OR TRIM(shared_by_name) = '')
+`);
 
 // Seed admin
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
