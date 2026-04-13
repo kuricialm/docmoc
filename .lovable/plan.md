@@ -1,67 +1,104 @@
 
-Goal: make authentication work in Lovable preview without breaking your Docker/NAS deployment, so admin actions, uploads, and user creation all work in both places.
 
-What’s actually happening
-- The backend is returning a successful login response, so the UI thinks you’re logged in.
-- But subsequent protected requests return `401 Not authenticated`, which is why:
-  - Admin page shows no users
-  - Create user fails
-  - Uploads fail
-- The strongest root cause is the session cookie not being persisted/sent correctly in Lovable’s embedded preview context. Your current cookie is set as `SameSite: 'lax'`, which commonly breaks inside iframe-style preview environments even though it can still work fine on a normal Docker deployment.
+## Plan
 
-Why this is safe to fix
-- This is a session-cookie handling issue, not a database, uploads, or infrastructure issue.
-- I do not need to change your storage, schema, API shape, or Docker architecture.
-- The fix should be limited to server-side cookie policy plus a small frontend auth verification improvement.
+### 1. Fix `.gitignore` — add `data/` exclusion
+Add `data/` to `.gitignore` so uploaded files, the SQLite database, and any runtime data are never committed to Git.
 
-Implementation plan
+### 2. Remove already-tracked `data/` from Git
+Run `git rm -r --cached data` equivalent — since we can't run git commands directly, the `.gitignore` addition will prevent future tracking, and I'll note the one-time cleanup command you need to run locally.
 
-1. Make session cookies preview-compatible and proxy-safe in `server.cjs`
-- Add a small cookie helper that detects secure/HTTPS contexts safely.
-- Set session cookies like:
-  - `httpOnly: true`
-  - `path: '/'`
-  - `secure: true` when request is effectively HTTPS
-  - `sameSite: 'none'` for secure preview contexts
-  - fallback to `sameSite: 'lax'` for plain local HTTP dev
-- Keep the existing 30-day `remember me` behavior.
+### 3. Update `.dockerignore` — confirm `data/` is excluded
+The current `.dockerignore` doesn't list `data/` either, so Docker builds could copy runtime data into images. Add it there too.
 
-2. Make proxy / NAS deployment safe
-- Add proxy-aware handling (`trust proxy` + forwarded protocol detection) so cookies behave correctly behind Docker/NAS reverse proxies too.
-- Reuse the same cookie helper for:
-  - login
-  - logout
-  - password-change forced logout
-- This keeps behavior consistent across Lovable preview and your own hosted server.
+### 4. Deliver updated prompts
+Add a line to both prompts about excluding `data/` from version control.
 
-3. Prevent false “logged in” state on the frontend
-- After sign-in, verify the session with `/auth/me` before treating the user as fully authenticated.
-- If cookie persistence fails, clear local auth state and show a clear error instead of letting the UI enter a broken half-logged-in state.
+---
 
-4. Re-test admin and uploads after the auth fix
-- Confirm admin page loads users
-- Confirm create-user works
-- Confirm uploads work
-- Confirm refresh keeps you logged in when expected
-- Confirm password change still clears the session
-- Confirm “remember me” still persists for 30 days
+### Files to modify
+- `.gitignore` — add `data/` entry
+- `.dockerignore` — add `data/` entry
 
-Files to update
-- `server.cjs` — main cookie/session fix
-- `src/contexts/AuthContext.tsx` — safer auth state confirmation after login
-- Possibly `src/lib/api.ts` — only if a tiny auth verification helper is cleaner there
+### Manual step (you run once locally)
+```bash
+git rm -r --cached data
+git commit -m "Stop tracking runtime data directory"
+git push
+```
 
-Validation I will do after implementation
-- Log in as admin in Lovable preview
-- Refresh the page and confirm session persists
-- Open `/admin` and confirm users load
-- Create a user successfully
-- Upload a file successfully
-- Test login with and without “Remember me”
-- Change password in Settings and confirm session is cleared
-- Sanity-check that Docker/NAS flow remains unchanged
+### Updated Prompt 1 — Rebuild
 
-Expected outcome
-- Lovable preview becomes fully testable like a real environment
-- Docker/NAS deployment keeps working
-- No backend migration or infrastructure rewrite needed
+```text
+Rebuild [App Name] without Supabase and without any hosted backend dependency.
+
+I want [App Name] to be designed for a minimal self-hosted architecture
+from the start. Focus on the frontend UI, UX, pages, and complete app
+flows, but do not build the app around Supabase auth, Supabase database,
+or Supabase storage.
+
+Keep the architecture suitable for a simple self-hosted backend (Express +
+SQLite) with local file storage. Do not introduce managed backend services
+or platform-specific infrastructure.
+
+The app must still feel fully functional in structure and flow, but the
+implementation should stay portable and easy to connect to a minimal
+self-hosted backend later.
+
+Prioritize:
+- premium minimal UI/UX
+- complete screens and flows
+- no emojis
+- no fake controls
+
+Backend & Auth requirements (critical for Lovable preview + Docker):
+- Use server.cjs (CommonJS) for the backend entry point.
+- Cookie-based sessions (httpOnly, path: '/').
+- Add app.set('trust proxy', 1) in Express.
+- Cookies must be proxy-aware: detect secure context via req.secure OR
+  x-forwarded-proto header. Use sameSite:'none' + secure:true when HTTPS
+  detected, fall back to sameSite:'lax' for plain HTTP.
+- Vite dev proxy must forward x-forwarded-proto:'https' header to the
+  backend so cookies work correctly in Lovable's preview iframe.
+- After login, verify session with /auth/me before treating user as
+  authenticated. If verification fails, show a clear error instead of
+  entering a half-logged-in state.
+- Auto-start the backend in dev via a Vite plugin (configureServer hook).
+- Support VITE_USE_EXTERNAL_BACKEND=true to skip auto-starting the backend.
+
+Data directory:
+- All runtime data (database, uploads) must go in a data/ directory.
+- Add data/ to both .gitignore and .dockerignore so runtime files are
+  never committed to the repo or baked into Docker images.
+
+Do not use Supabase.
+Do not assume a hosted backend.
+Keep everything portable and simple.
+```
+
+### Updated Prompt 2 — Dockerize
+
+```text
+Dockerize this project based on its current working codebase.
+
+Requirements:
+- Generate a production-ready Dockerfile
+- Generate docker-compose.yml with volume mount for persistent data
+- Generate .dockerignore (must include data/ to exclude runtime files)
+- Confirm .gitignore includes data/ so uploads and database are never
+  committed to the repo
+- Use npm install, not npm ci, in the Dockerfile
+- Make sure server.cjs is used (CommonJS) for the Express backend
+- Make sure Express, better-sqlite3, and all runtime deps are in
+  package.json dependencies (not devDependencies)
+- Keep the setup minimal, clean, and working
+- Do not reintroduce Supabase or any hosted backend dependency
+- Do not restructure the app unnecessarily
+- Do not change working code unless required for Docker
+- The cookie/session system must remain proxy-aware (sameSite/secure
+  detection already in server.cjs) so it works behind reverse proxies
+
+After generating the files, briefly explain the install, build, and
+run commands used.
+```
+
