@@ -17,9 +17,9 @@ export default function RenameDialog({ document: doc, open, onClose }: Props) {
 
   useEffect(() => {
     if (open) {
-      setName('');
+      setName(doc?.name ?? '');
     }
-  }, [open, doc?.id]);
+  }, [open, doc?.id, doc?.name]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +40,7 @@ export default function RenameDialog({ document: doc, open, onClose }: Props) {
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={doc.name}
+            placeholder="Document name"
             autoFocus
             className="h-9"
           />
