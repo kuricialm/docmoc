@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import AppSidebar from '@/components/AppSidebar';
 import TopBar from '@/components/TopBar';
@@ -12,7 +12,9 @@ import SettingsPage from '@/pages/Settings';
 import AdminPage from '@/pages/Admin';
 import { useDocumentMutations } from '@/hooks/useDocuments';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { ACCEPTED_UPLOAD_ATTR } from '@/lib/fileTypes';
+import { ACCEPTED_UPLOAD_ATTR, isAcceptedUploadFile } from '@/lib/fileTypes';
+import { Upload } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function MainLayout() {
   const isMobile = useIsMobile();
@@ -21,6 +23,8 @@ export default function MainLayout() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
   const [uploadTrigger, setUploadTrigger] = useState(0);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const dragDepthRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { uploadDocument } = useDocumentMutations();
 
@@ -37,9 +41,61 @@ export default function MainLayout() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    Array.from(files).forEach((f) => uploadDocument.mutate(f));
+    const accepted = Array.from(files).filter(isAcceptedUploadFile);
+    const rejected = files.length - accepted.length;
+    accepted.forEach((f) => uploadDocument.mutate(f));
+    if (rejected > 0) {
+      toast.error(`${rejected} file${rejected > 1 ? 's were' : ' was'} skipped (unsupported format).`);
+    }
     e.target.value = '';
   };
+
+  const resetDragState = useCallback(() => {
+    dragDepthRef.current = 0;
+    setIsDraggingFiles(false);
+  }, []);
+
+  const hasFileDrag = useCallback((e: React.DragEvent) => {
+    return Array.from(e.dataTransfer.types).includes('Files');
+  }, []);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    if (!hasFileDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current += 1;
+    setIsDraggingFiles(true);
+  }, [hasFileDrag]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!hasFileDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+  }, [hasFileDrag]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    if (!hasFileDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current -= 1;
+    if (dragDepthRef.current <= 0) resetDragState();
+  }, [hasFileDrag, resetDragState]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    if (!hasFileDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    resetDragState();
+    const files = Array.from(e.dataTransfer.files);
+    if (!files.length) return;
+    const accepted = files.filter(isAcceptedUploadFile);
+    const rejected = files.length - accepted.length;
+    accepted.forEach((f) => uploadDocument.mutate(f));
+    if (rejected > 0) {
+      toast.error(`${rejected} file${rejected > 1 ? 's were' : ' was'} skipped (unsupported format).`);
+    }
+  }, [hasFileDrag, resetDragState, uploadDocument]);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -51,7 +107,13 @@ export default function MainLayout() {
         mobileOpen={mobileSidebarOpen}
         onMobileClose={() => setMobileSidebarOpen(false)}
       />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div
+        className="flex-1 flex flex-col min-w-0 relative"
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <TopBar
           viewMode={viewMode}
           onViewModeChange={setViewMode}
@@ -73,6 +135,17 @@ export default function MainLayout() {
             <Route path="/admin" element={<AdminPage />} />
           </Routes>
         </main>
+
+        {isDraggingFiles && (
+          <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/50 bg-card/90 px-10 py-8 shadow-2xl backdrop-blur-md">
+              <div className="rounded-full bg-primary/10 p-4">
+                <Upload className="h-8 w-8 text-primary" />
+              </div>
+              <p className="text-sm font-medium text-foreground">Drop to upload</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
