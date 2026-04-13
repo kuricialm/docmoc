@@ -437,7 +437,7 @@ app.post('/api/auth/register', (req, res) => {
 // ── Documents ──
 app.get('/api/documents', auth, (req, res) => {
   cleanupExpiredShares(req.user.id);
-  const { trashed, starred, shared, tagId, recent } = req.query;
+  const { trashed, starred, shared, tagId, recent, recentLimit } = req.query;
   let sql = 'SELECT * FROM documents WHERE user_id = ?';
   const params = [req.user.id];
 
@@ -451,7 +451,17 @@ app.get('/api/documents', auth, (req, res) => {
   if (shared === 'true') { sql += ' AND shared = 1'; }
 
   sql += ' ORDER BY updated_at DESC';
-  if (recent === 'true') sql += ' LIMIT 20';
+  if (recent === 'true') {
+    if (recentLimit !== undefined) {
+      const parsedLimit = Number.parseInt(String(recentLimit), 10);
+      if (Number.isFinite(parsedLimit) && parsedLimit > 0) {
+        sql += ' LIMIT ?';
+        params.push(Math.min(parsedLimit, 1000));
+      }
+    } else {
+      sql += ' LIMIT 20';
+    }
+  }
 
   let docs = db.prepare(sql).all(...params);
 

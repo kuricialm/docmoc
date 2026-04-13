@@ -29,6 +29,7 @@ export function useDocuments(filter?: {
   shared?: boolean;
   tagId?: string;
   recent?: boolean;
+  recentLimit?: number;
 }) {
   const { user } = useAuth();
 

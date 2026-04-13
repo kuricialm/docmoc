@@ -181,6 +181,7 @@ export type DocFilter = {
   shared?: boolean;
   tagId?: string;
   recent?: boolean;
+  recentLimit?: number;
 };
 
 export async function uploadDocument(_userId: string, file: File): Promise<DocRecord & { tags: TagRecord[] }> {
@@ -205,6 +206,7 @@ export async function getDocuments(_userId: string, filter?: DocFilter): Promise
   if (filter?.shared) params.set('shared', 'true');
   if (filter?.tagId) params.set('tagId', filter.tagId);
   if (filter?.recent) params.set('recent', 'true');
+  if (filter?.recentLimit !== undefined) params.set('recentLimit', String(filter.recentLimit));
   return apiFetch(`/documents?${params.toString()}`);
 }
 

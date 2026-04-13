@@ -12,7 +12,7 @@ import { Clock } from 'lucide-react';
 type Props = { viewMode: 'grid' | 'list'; search: string };
 
 export default function RecentPage({ viewMode, search }: Props) {
-  const { data: docs = [] } = useDocuments({ recent: true });
+  const { data: docs = [] } = useDocuments({ recent: true, recentLimit: 0 });
   const { data: tags = [] } = useTags();
   const [viewDocId, setViewDocId] = useState<string | null>(null);
   const [renameDoc, setRenameDoc] = useState<Document | null>(null);
