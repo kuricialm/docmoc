@@ -87,6 +87,7 @@ ensureDocumentColumn('share_password_hash', 'share_password_hash TEXT');
 ensureDocumentColumn('shared_by_user_id', 'shared_by_user_id TEXT');
 ensureDocumentColumn('uploaded_by_name_snapshot', 'uploaded_by_name_snapshot TEXT');
 ensureDocumentColumn('shared_by_name_snapshot', 'shared_by_name_snapshot TEXT');
+backfillDocumentIdentitySnapshots();
 
 // Seed admin
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -156,6 +157,33 @@ function resolveDisplayName(...candidates) {
     if (trimmed) return trimmed;
   }
   return 'Unknown user';
+}
+
+function backfillDocumentIdentitySnapshots() {
+  db.prepare(`
+    UPDATE documents AS d
+    SET uploaded_by_name_snapshot = (
+      SELECT COALESCE(NULLIF(TRIM(u.full_name), ''), u.email, 'Unknown user')
+      FROM users u
+      WHERE u.id = d.user_id
+    )
+    WHERE uploaded_by_name_snapshot IS NULL OR TRIM(uploaded_by_name_snapshot) = ''
+  `).run();
+
+  db.prepare(`
+    UPDATE documents AS d
+    SET shared_by_name_snapshot = COALESCE(
+      (
+        SELECT COALESCE(NULLIF(TRIM(u.full_name), ''), u.email, NULL)
+        FROM users u
+        WHERE u.id = COALESCE(d.shared_by_user_id, d.user_id)
+      ),
+      uploaded_by_name_snapshot,
+      'Unknown user'
+    )
+    WHERE d.shared = 1
+      AND (d.shared_by_name_snapshot IS NULL OR TRIM(d.shared_by_name_snapshot) = '')
+  `).run();
 }
 
 function getWorkspaceLogoUrl() {
@@ -506,15 +534,7 @@ app.post('/api/auth/register', (req, res) => {
 app.get('/api/documents', auth, (req, res) => {
   cleanupExpiredShares(req.user.id);
   const { trashed, starred, shared, tagId, recent, recentLimit, sortBy } = req.query;
-  let sql = `
-    SELECT d.*,
-           COALESCE(NULLIF(TRIM(u.full_name), ''), u.email, 'Unknown user') AS uploaded_by_name,
-           COALESCE(NULLIF(TRIM(s.full_name), ''), s.email, NULLIF(TRIM(u.full_name), ''), u.email, 'Unknown user') AS shared_by_name
-    FROM documents d
-    LEFT JOIN users u ON u.id = d.user_id
-    LEFT JOIN users s ON s.id = COALESCE(d.shared_by_user_id, d.user_id)
-    WHERE d.user_id = ?
-  `;
+  let sql = 'SELECT d.* FROM documents d WHERE d.user_id = ?';
   const params = [req.user.id];
 
   if (trashed !== undefined) {
@@ -551,13 +571,11 @@ app.get('/api/documents', auth, (req, res) => {
   docs = docs.map(d => {
     const { share_password_hash, ...rest } = d;
     const uploadedByName = resolveDisplayName(
-      rest.uploaded_by_name,
       rest.uploaded_by_name_snapshot,
       req.user.full_name,
       req.user.email,
     );
     const sharedByName = resolveDisplayName(
-      rest.shared_by_name,
       rest.shared_by_name_snapshot,
       uploadedByName,
       req.user.email,
@@ -719,8 +737,28 @@ app.patch('/api/documents/:id/share', auth, (req, res) => {
   }
 
   const shareToken = existing.share_token || uid();
-  db.prepare('UPDATE documents SET shared = 1, share_token = ?, share_expires_at = ?, share_password_hash = ?, shared_by_user_id = ?, shared_by_name_snapshot = ?, updated_at = ? WHERE id = ? AND user_id = ?')
-    .run(shareToken, shareExpiresAt, sharePasswordHash, req.user.id, resolveDisplayName(req.user.full_name, req.user.email), now(), req.params.id, req.user.id);
+  db.prepare(`
+    UPDATE documents
+    SET shared = 1,
+        share_token = ?,
+        share_expires_at = ?,
+        share_password_hash = ?,
+        shared_by_user_id = ?,
+        shared_by_name_snapshot = ?,
+        uploaded_by_name_snapshot = COALESCE(NULLIF(TRIM(uploaded_by_name_snapshot), ''), ?),
+        updated_at = ?
+    WHERE id = ? AND user_id = ?
+  `).run(
+    shareToken,
+    shareExpiresAt,
+    sharePasswordHash,
+    req.user.id,
+    resolveDisplayName(req.user.full_name, req.user.email),
+    resolveDisplayName(req.user.full_name, req.user.email),
+    now(),
+    req.params.id,
+    req.user.id,
+  );
   logDocumentEvent(req.params.id, req.user.id, existing.share_token ? 'share_updated' : 'share_enabled', { expiresAt: shareExpiresAt });
   if (expiryChanged) {
     logDocumentEvent(req.params.id, req.user.id, 'share_expiry_changed', {
@@ -926,8 +964,8 @@ app.get('/api/shared/:token', (req, res) => {
     SELECT t.id, t.name, t.color FROM tags t
     JOIN document_tags dt ON dt.tag_id = t.id WHERE dt.document_id = ?
   `).all(doc.id);
-  const uploadedByName = resolveDisplayName(doc.uploaded_by_name, doc.uploaded_by_name_snapshot);
-  const sharedByName = resolveDisplayName(doc.shared_by_name, doc.shared_by_name_snapshot, uploadedByName);
+  const uploadedByName = resolveDisplayName(doc.uploaded_by_name_snapshot);
+  const sharedByName = resolveDisplayName(doc.shared_by_name_snapshot, uploadedByName);
   res.json({
     ...doc,
     name: normalizeUploadedFilename(doc.name),
