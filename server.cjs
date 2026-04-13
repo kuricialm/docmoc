@@ -145,8 +145,13 @@ function isValidPassword(password) {
   return typeof password === 'string' && password.length >= 4;
 }
 
-function resolveDisplayName(preferredName, preferredEmail, fallbackName, fallbackEmail) {
-  return preferredName || preferredEmail || fallbackName || fallbackEmail || 'Unknown user';
+function resolveDisplayName(...candidates) {
+  for (const value of candidates) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return 'Unknown user';
 }
 
 function getWorkspaceLogoUrl() {
@@ -499,8 +504,8 @@ app.get('/api/documents', auth, (req, res) => {
   const { trashed, starred, shared, tagId, recent, recentLimit, sortBy } = req.query;
   let sql = `
     SELECT d.*,
-           COALESCE(u.full_name, u.email, 'Unknown user') AS uploaded_by_name,
-           COALESCE(s.full_name, s.email, u.full_name, u.email, 'Unknown user') AS shared_by_name
+           COALESCE(NULLIF(TRIM(u.full_name), ''), u.email, 'Unknown user') AS uploaded_by_name,
+           COALESCE(NULLIF(TRIM(s.full_name), ''), s.email, NULLIF(TRIM(u.full_name), ''), u.email, 'Unknown user') AS shared_by_name
     FROM documents d
     LEFT JOIN users u ON u.id = d.user_id
     LEFT JOIN users s ON s.id = COALESCE(d.shared_by_user_id, d.user_id)
@@ -541,18 +546,8 @@ app.get('/api/documents', auth, (req, res) => {
   `);
   docs = docs.map(d => {
     const { share_password_hash, ...rest } = d;
-    const uploadedByName = resolveDisplayName(
-      rest.uploaded_by_name,
-      null,
-      req.user.full_name,
-      req.user.email,
-    );
-    const sharedByName = resolveDisplayName(
-      rest.shared_by_name,
-      null,
-      uploadedByName,
-      req.user.email,
-    );
+    const uploadedByName = resolveDisplayName(rest.uploaded_by_name, req.user.full_name, req.user.email);
+    const sharedByName = resolveDisplayName(rest.shared_by_name, uploadedByName, req.user.email);
     return ({
       ...rest,
       name: normalizeUploadedFilename(rest.name),
@@ -830,7 +825,7 @@ app.get('/api/documents/:id/history', auth, (req, res) => {
 
     const rows = db.prepare(`
       SELECT h.id, h.document_id, h.user_id, h.action, h.details, h.created_at,
-             COALESCE(u.full_name, u.email, 'Unknown user') AS actor_name
+             COALESCE(NULLIF(TRIM(u.full_name), ''), u.email, 'Unknown user') AS actor_name
       FROM document_history h
       LEFT JOIN users u ON u.id = h.user_id
       WHERE h.document_id = ?
@@ -891,8 +886,8 @@ app.get('/api/documents/:id/history', auth, (req, res) => {
 app.get('/api/shared/:token', (req, res) => {
   const doc = db.prepare(`
     SELECT d.*,
-           COALESCE(u.full_name, u.email, 'Unknown user') AS uploaded_by_name,
-           COALESCE(s.full_name, s.email, u.full_name, u.email, 'Unknown user') AS shared_by_name
+           COALESCE(NULLIF(TRIM(u.full_name), ''), u.email, 'Unknown user') AS uploaded_by_name,
+           COALESCE(NULLIF(TRIM(s.full_name), ''), s.email, NULLIF(TRIM(u.full_name), ''), u.email, 'Unknown user') AS shared_by_name
     FROM documents d
     LEFT JOIN users u ON u.id = d.user_id
     LEFT JOIN users s ON s.id = COALESCE(d.shared_by_user_id, d.user_id)
@@ -915,8 +910,8 @@ app.get('/api/shared/:token', (req, res) => {
     SELECT t.id, t.name, t.color FROM tags t
     JOIN document_tags dt ON dt.tag_id = t.id WHERE dt.document_id = ?
   `).all(doc.id);
-  const uploadedByName = resolveDisplayName(doc.uploaded_by_name, null, null, null);
-  const sharedByName = resolveDisplayName(doc.shared_by_name, null, uploadedByName, null);
+  const uploadedByName = resolveDisplayName(doc.uploaded_by_name);
+  const sharedByName = resolveDisplayName(doc.shared_by_name, uploadedByName);
   res.json({
     ...doc,
     name: normalizeUploadedFilename(doc.name),
