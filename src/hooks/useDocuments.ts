@@ -43,6 +43,7 @@ export function useDocuments(filter?: {
   tagId?: string;
   recent?: boolean;
   recentLimit?: number;
+  sortBy?: 'updated' | 'created';
 }) {
   const { user } = useAuth();
 

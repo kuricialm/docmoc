@@ -192,6 +192,7 @@ export type DocFilter = {
   tagId?: string;
   recent?: boolean;
   recentLimit?: number;
+  sortBy?: 'updated' | 'created';
 };
 
 export async function uploadDocument(_userId: string, file: File): Promise<DocRecord & { tags: TagRecord[] }> {
@@ -217,6 +218,7 @@ export async function getDocuments(_userId: string, filter?: DocFilter): Promise
   if (filter?.tagId) params.set('tagId', filter.tagId);
   if (filter?.recent) params.set('recent', 'true');
   if (filter?.recentLimit !== undefined) params.set('recentLimit', String(filter.recentLimit));
+  if (filter?.sortBy) params.set('sortBy', filter.sortBy);
   return apiFetch(`/documents?${params.toString()}`);
 }
 

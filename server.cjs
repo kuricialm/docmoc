@@ -169,6 +169,20 @@ function logDocumentEvent(documentId, userId, action, details = null) {
     .run(uid(), documentId, userId, action, details ? JSON.stringify(details) : null, now());
 }
 
+function ensureUploadHistoryEntry(documentId, userId) {
+  const existing = db.prepare(`
+    SELECT id FROM document_history
+    WHERE document_id = ? AND user_id = ? AND action = 'uploaded'
+    LIMIT 1
+  `).get(documentId, userId);
+  if (existing) return;
+
+  const doc = db.prepare('SELECT name, created_at FROM documents WHERE id = ? AND user_id = ?').get(documentId, userId);
+  if (!doc) return;
+  db.prepare('INSERT INTO document_history (id, document_id, user_id, action, details, created_at) VALUES (?,?,?,?,?,?)')
+    .run(uid(), documentId, userId, 'uploaded', JSON.stringify({ name: doc.name }), doc.created_at || now());
+}
+
 // ── Trash cleanup ──
 function cleanupTrash() {
   const cutoff = new Date(Date.now() - TRASH_RETENTION_DAYS * 86400000).toISOString();
@@ -452,7 +466,7 @@ app.post('/api/auth/register', (req, res) => {
 // ── Documents ──
 app.get('/api/documents', auth, (req, res) => {
   cleanupExpiredShares(req.user.id);
-  const { trashed, starred, shared, tagId, recent, recentLimit } = req.query;
+  const { trashed, starred, shared, tagId, recent, recentLimit, sortBy } = req.query;
   let sql = 'SELECT * FROM documents WHERE user_id = ?';
   const params = [req.user.id];
 
@@ -465,7 +479,8 @@ app.get('/api/documents', auth, (req, res) => {
   if (starred === 'true') { sql += ' AND starred = 1'; }
   if (shared === 'true') { sql += ' AND shared = 1'; }
 
-  sql += ' ORDER BY updated_at DESC';
+  const orderBy = sortBy === 'created' ? 'created_at' : 'updated_at';
+  sql += ` ORDER BY ${orderBy} DESC`;
   if (recent === 'true') {
     if (recentLimit !== undefined) {
       const parsedLimit = Number.parseInt(String(recentLimit), 10);
@@ -707,6 +722,7 @@ app.put('/api/documents/:id/note', auth, (req, res) => {
 app.get('/api/documents/:id/history', auth, (req, res) => {
   const owned = db.prepare('SELECT id FROM documents WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!owned) return res.status(404).json({ error: 'Not found' });
+  ensureUploadHistoryEntry(req.params.id, req.user.id);
   const rows = db.prepare(`
     SELECT h.id, h.document_id, h.user_id, h.action, h.details, h.created_at, u.full_name, u.email
     FROM document_history h
@@ -714,11 +730,21 @@ app.get('/api/documents/:id/history', auth, (req, res) => {
     WHERE h.document_id = ?
     ORDER BY h.created_at DESC
   `).all(req.params.id);
-  res.json(rows.map((r) => ({
-    ...r,
-    details: r.details ? JSON.parse(r.details) : null,
-    actor_name: r.full_name || r.email || 'Unknown user',
-  })));
+  res.json(rows.map((r) => {
+    let parsedDetails = null;
+    if (r.details) {
+      try {
+        parsedDetails = JSON.parse(r.details);
+      } catch (_) {
+        parsedDetails = null;
+      }
+    }
+    return {
+      ...r,
+      details: parsedDetails,
+      actor_name: r.full_name || r.email || 'Unknown user',
+    };
+  }));
 });
 
 // ── Shared (no auth) ──
