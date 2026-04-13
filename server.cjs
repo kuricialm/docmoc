@@ -15,6 +15,8 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@docmoc.local';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
 const TRASH_RETENTION_DAYS = parseInt(process.env.TRASH_RETENTION_DAYS || '30', 10);
 const COOKIE_SECRET = process.env.COOKIE_SECRET || 'docmoc-secret-change-me';
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined;
+const COOKIE_SECURE_MODE = process.env.COOKIE_SECURE_MODE || 'auto'; // auto | always | never
 
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -67,6 +69,8 @@ db.exec(`
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
   CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+  CREATE INDEX IF NOT EXISTS idx_document_history_document_created
+    ON document_history (document_id, created_at DESC);
 `);
 
 function ensureDocumentColumn(columnName, sqlDefinition) {
@@ -165,8 +169,9 @@ function extFromMime(mime) {
 }
 
 function logDocumentEvent(documentId, userId, action, details = null) {
+  const serializedDetails = details && typeof details === 'object' ? JSON.stringify(details) : null;
   db.prepare('INSERT INTO document_history (id, document_id, user_id, action, details, created_at) VALUES (?,?,?,?,?,?)')
-    .run(uid(), documentId, userId, action, details ? JSON.stringify(details) : null, now());
+    .run(uid(), documentId, userId, action, serializedDetails, now());
 }
 
 function getOwnedDocument(documentId, userId) {
@@ -221,14 +226,29 @@ function cleanupExpiredShares(userId) {
 }
 
 // ── Express app ──
+function resolveTrustProxySetting() {
+  const raw = process.env.TRUST_PROXY;
+  if (raw === undefined) return process.env.NODE_ENV === 'production' ? 1 : false;
+  const normalized = String(raw).trim().toLowerCase();
+  if (normalized === 'true') return 1;
+  if (normalized === 'false') return false;
+  const asNumber = Number.parseInt(normalized, 10);
+  if (!Number.isNaN(asNumber)) return asNumber;
+  return raw;
+}
+
 const app = express();
-app.set('trust proxy', 1);
+app.set('trust proxy', resolveTrustProxySetting());
 app.use(express.json());
 app.use(cookieParser(COOKIE_SECRET));
 
 // Cookie helper — adapts to secure (HTTPS / proxy) contexts for iframe/preview compat
 function sessionCookieOpts(req, maxAge) {
-  const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  const isSecure = COOKIE_SECURE_MODE === 'always'
+    ? true
+    : COOKIE_SECURE_MODE === 'never'
+      ? false
+      : req.secure;
   const opts = { httpOnly: true, path: '/' };
   if (isSecure) {
     opts.secure = true;
@@ -236,6 +256,7 @@ function sessionCookieOpts(req, maxAge) {
   } else {
     opts.sameSite = 'lax';
   }
+  if (COOKIE_DOMAIN) opts.domain = COOKIE_DOMAIN;
   if (maxAge) opts.maxAge = maxAge;
   return opts;
 }
@@ -598,6 +619,7 @@ app.patch('/api/documents/:id/restore', auth, (req, res) => {
 app.delete('/api/documents/:id', auth, (req, res) => {
   const doc = db.prepare('SELECT storage_path FROM documents WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!doc) return res.status(404).json({ error: 'Not found' });
+  logDocumentEvent(req.params.id, req.user.id, 'permanently_deleted');
   const filePath = path.join(DATA_DIR, doc.storage_path);
   try { fs.unlinkSync(filePath); } catch (_) {}
   try { fs.rmdirSync(path.dirname(filePath)); } catch (_) {}
@@ -761,31 +783,71 @@ app.put('/api/documents/:id/note', auth, (req, res) => {
 });
 
 app.get('/api/documents/:id/history', auth, (req, res) => {
-  const owned = db.prepare('SELECT id FROM documents WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
-  if (!owned) return res.status(404).json({ error: 'Not found' });
-  ensureUploadHistoryEntry(req.params.id, req.user.id);
-  const rows = db.prepare(`
-    SELECT h.id, h.document_id, h.user_id, h.action, h.details, h.created_at, u.full_name, u.email
-    FROM document_history h
-    LEFT JOIN users u ON u.id = h.user_id
-    WHERE h.document_id = ?
-    ORDER BY h.created_at DESC
-  `).all(req.params.id);
-  res.json(rows.map((r) => {
-    let parsedDetails = null;
-    if (r.details) {
-      try {
-        parsedDetails = JSON.parse(r.details);
-      } catch (_) {
-        parsedDetails = null;
-      }
+  const startedAt = Date.now();
+  try {
+    const owned = db.prepare('SELECT id, name, created_at FROM documents WHERE id = ? AND user_id = ?')
+      .get(req.params.id, req.user.id);
+    if (!owned) {
+      return res.status(404).json({ error: 'Not found' });
     }
-    return {
-      ...r,
-      details: parsedDetails,
-      actor_name: r.full_name || r.email || 'Unknown user',
-    };
-  }));
+
+    const rows = db.prepare(`
+      SELECT h.id, h.document_id, h.user_id, h.action, h.details, h.created_at,
+             COALESCE(u.full_name, u.email, 'Unknown user') AS actor_name
+      FROM document_history h
+      LEFT JOIN users u ON u.id = h.user_id
+      WHERE h.document_id = ?
+      ORDER BY h.created_at DESC
+      LIMIT 200
+    `).all(req.params.id);
+
+    let mapped = rows.map((r) => {
+      let parsedDetails = null;
+      if (r.details && r.details.startsWith('{')) {
+        try { parsedDetails = JSON.parse(r.details); } catch (_) { parsedDetails = null; }
+      }
+      return {
+        id: r.id,
+        document_id: r.document_id,
+        user_id: r.user_id,
+        action: r.action,
+        details: parsedDetails,
+        created_at: r.created_at,
+        actor_name: r.actor_name,
+      };
+    });
+
+    const hasUploadAction = mapped.some((event) => event.action === 'uploaded');
+    // Backfill for legacy docs missing upload event, without writing during read path.
+    if (!hasUploadAction) {
+      mapped = [
+        ...mapped,
+        {
+        id: `synthetic-upload-${owned.id}`,
+        document_id: owned.id,
+        user_id: req.user.id,
+        action: 'uploaded',
+        details: { name: owned.name },
+        created_at: owned.created_at || now(),
+        actor_name: req.user.full_name || req.user.email || 'Unknown user',
+      }];
+    }
+
+    mapped.sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+    const elapsed = Date.now() - startedAt;
+    if (elapsed > 200) {
+      console.warn('[history] slow-request', { documentId: req.params.id, userId: req.user.id, ms: elapsed });
+    }
+    return res.json(mapped);
+  } catch (error) {
+    console.error('[history] failed', {
+      documentId: req.params.id,
+      userId: req.user?.id,
+      message: error?.message,
+    });
+    return res.status(500).json({ error: 'Failed to load document history' });
+  }
 });
 
 // ── Shared (no auth) ──
