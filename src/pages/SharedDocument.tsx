@@ -140,7 +140,7 @@ export default function SharedDocument() {
         <div className="flex items-center gap-3">
           <FileTypeIcon fileType={doc.file_type} size="md" />
           <div>
-            <h1 className={cn('font-semibold', hasArabicCharacters(doc.name) && 'font-arabic-text')} dir={hasArabicCharacters(doc.name) ? 'rtl' : 'ltr'}>
+            <h1 className={cn('font-semibold', hasArabicCharacters(doc.name) && 'font-arabic-text')}>
               {doc.name}
             </h1>
             <p className="text-xs text-muted-foreground">{typeInfo.label} — {formatFileSize(doc.file_size)}</p>
@@ -150,7 +150,7 @@ export default function SharedDocument() {
           {doc.file_type === 'application/pdf' && previewUrl ? (
             <iframe src={previewUrl} className="w-full h-[70vh]" title="PDF" />
           ) : doc.file_type === 'text/plain' && textContent !== null ? (
-            <pre className={cn('w-full p-6 text-sm whitespace-pre-wrap', hasArabicCharacters(textContent) && 'font-arabic-text')} dir={hasArabicCharacters(textContent) ? 'rtl' : 'ltr'}>
+            <pre className={cn('w-full p-6 text-sm whitespace-pre-wrap', hasArabicCharacters(textContent) && 'font-arabic-text')}>
               {textContent}
             </pre>
           ) : isImageType(doc.file_type) && previewUrl ? (

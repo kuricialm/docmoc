@@ -64,7 +64,6 @@ export default function SharedPage({ search }: Props) {
                 <div className="flex-1 min-w-0">
                   <p
                     className={cn('text-sm font-medium truncate cursor-pointer hover:text-primary transition-colors duration-150', hasArabicCharacters(doc.name) && 'font-arabic-text')}
-                    dir={hasArabicCharacters(doc.name) ? 'rtl' : 'ltr'}
                     onClick={() => setViewDocId(doc.id)}
                   >
                     {doc.name}

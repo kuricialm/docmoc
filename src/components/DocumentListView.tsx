@@ -44,7 +44,7 @@ export default function DocumentListView({ documents, onView, onRename }: Props)
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-3">
                       <FileTypeIcon fileType={doc.file_type} size="sm" />
-                      <span className={cn('font-medium truncate max-w-[200px]', hasArabicCharacters(doc.name) && 'font-arabic-text')} dir={hasArabicCharacters(doc.name) ? 'rtl' : 'ltr'}>
+                      <span className={cn('font-medium truncate max-w-[200px]', hasArabicCharacters(doc.name) && 'font-arabic-text')}>
                         {doc.name}
                       </span>
                       <button
@@ -108,7 +108,7 @@ export default function DocumentListView({ documents, onView, onRename }: Props)
             >
               <FileTypeIcon fileType={doc.file_type} size="sm" />
               <div className="flex-1 min-w-0">
-                <p className={cn('text-sm font-medium truncate', hasArabicCharacters(doc.name) && 'font-arabic-text')} dir={hasArabicCharacters(doc.name) ? 'rtl' : 'ltr'}>
+                <p className={cn('text-sm font-medium truncate', hasArabicCharacters(doc.name) && 'font-arabic-text')}>
                   {doc.name}
                 </p>
                 <div className="flex items-center gap-2 mt-0.5">

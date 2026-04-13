@@ -35,7 +35,7 @@ export default function TrashPage({ search }: Props) {
               <div key={doc.id} className="bg-card border border-border/50 rounded-xl flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 hover:border-border/80 transition-colors duration-150">
                 <FileTypeIcon fileType={doc.file_type} size="sm" />
                 <div className="flex-1 min-w-0">
-                  <p className={cn('text-sm font-medium truncate', hasArabicCharacters(doc.name) && 'font-arabic-text')} dir={hasArabicCharacters(doc.name) ? 'rtl' : 'ltr'}>
+                  <p className={cn('text-sm font-medium truncate', hasArabicCharacters(doc.name) && 'font-arabic-text')}>
                     {doc.name}
                   </p>
                   <p className="text-xs text-muted-foreground/70 mt-0.5">{formatFileSize(doc.file_size)} — {daysLeft} days left</p>

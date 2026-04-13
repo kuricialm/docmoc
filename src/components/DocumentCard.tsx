@@ -42,7 +42,7 @@ export default function DocumentCard({ document: doc, onView, onRename }: Props)
       <div className="p-3.5 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className={cn('text-sm font-medium truncate leading-snug', hasArabicCharacters(doc.name) && 'font-arabic-text')} dir={hasArabicCharacters(doc.name) ? 'rtl' : 'ltr'}>
+            <p className={cn('text-sm font-medium truncate leading-snug', hasArabicCharacters(doc.name) && 'font-arabic-text')}>
               {doc.name}
             </p>
             <div className="flex items-center gap-2 mt-1.5">
