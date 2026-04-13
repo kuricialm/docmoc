@@ -2,10 +2,12 @@ import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDocuments, Document } from '@/hooks/useDocuments';
 import { useTags, useTagMutations } from '@/hooks/useTags';
+import { useDocumentBrowse } from '@/hooks/useDocumentBrowse';
 import DocumentCard from '@/components/DocumentCard';
 import DocumentListView from '@/components/DocumentListView';
 import DocumentViewer from '@/components/DocumentViewer';
 import RenameDialog from '@/components/RenameDialog';
+import DocumentBrowseToolbar from '@/components/DocumentBrowseToolbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Edit2, Trash2, X, Check } from 'lucide-react';
@@ -15,7 +17,7 @@ type Props = { viewMode: 'grid' | 'list'; search: string };
 
 export default function TagView({ viewMode, search }: Props) {
   const { tagId } = useParams<{ tagId: string }>();
-  const { data: tags } = useTags();
+  const { data: tags = [] } = useTags();
   const { data: docs = [] } = useDocuments({ tagId });
   const { updateTag, deleteTag } = useTagMutations();
   const [viewDocId, setViewDocId] = useState<string | null>(null);
@@ -23,8 +25,24 @@ export default function TagView({ viewMode, search }: Props) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
 
-  const tag = tags?.find((t) => t.id === tagId);
-  const filtered = docs.filter((d) => d.name.toLowerCase().includes(search.toLowerCase()));
+  const tag = tags.find((t) => t.id === tagId);
+
+  const {
+    dateFilter,
+    setDateFilter,
+    fileTypeFilter,
+    setFileTypeFilter,
+    tagFilter,
+    setTagFilter,
+    page,
+    setPage,
+    totalPages,
+    availableFileTypes,
+    filteredDocuments,
+    paginatedDocuments,
+    resetFilters,
+  } = useDocumentBrowse(docs, search, { lockedTagId: tagId });
+
   const viewDoc = useMemo(() => docs.find((doc) => doc.id === viewDocId) ?? null, [docs, viewDocId]);
 
   if (!tag) return <p className="text-muted-foreground text-center py-20">Tag not found</p>;
@@ -60,14 +78,32 @@ export default function TagView({ viewMode, search }: Props) {
         )}
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-20">No documents with this tag</p>
+      <DocumentBrowseToolbar
+        dateFilter={dateFilter}
+        onDateFilterChange={setDateFilter}
+        fileTypeFilter={fileTypeFilter}
+        onFileTypeFilterChange={setFileTypeFilter}
+        tagFilter={tagFilter}
+        onTagFilterChange={setTagFilter}
+        availableFileTypes={availableFileTypes}
+        tags={tags}
+        totalResults={filteredDocuments.length}
+        totalBaseResults={docs.length}
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        onResetFilters={resetFilters}
+        lockTagFilter
+      />
+
+      {filteredDocuments.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-20">No matching documents with this tag</p>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map((doc) => <DocumentCard key={doc.id} document={doc} onView={(selected) => setViewDocId(selected.id)} onRename={setRenameDoc} />)}
+          {paginatedDocuments.map((doc) => <DocumentCard key={doc.id} document={doc} onView={(selected) => setViewDocId(selected.id)} onRename={setRenameDoc} />)}
         </div>
       ) : (
-        <DocumentListView documents={filtered} onView={(selected) => setViewDocId(selected.id)} onRename={setRenameDoc} />
+        <DocumentListView documents={paginatedDocuments} onView={(selected) => setViewDocId(selected.id)} onRename={setRenameDoc} />
       )}
 
       <DocumentViewer document={viewDoc} open={!!viewDocId} onClose={() => setViewDocId(null)} />
