@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { ImageOff } from 'lucide-react';
+import { useLocalSettings } from '@/hooks/useLocalSettings';
 
 const ACCENT_COLORS = ['#000000', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#EF4444', '#F59E0B', '#22C55E', '#06B6D4'];
 const Section = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
@@ -16,6 +17,7 @@ const Section = ({ children, className = '' }: { children: React.ReactNode; clas
 );
 
 export default function SettingsPage() {
+  const { settings: localSettings, update: updateLocalSettings } = useLocalSettings();
   const { user, profile, refreshProfile, isAdmin, signOut, appSettings, refreshSettings } = useAuth();
 
   const [newPassword, setNewPassword] = useState('');
@@ -219,6 +221,21 @@ export default function SettingsPage() {
           </div>
         </Section>
       )}
+
+      <Section>
+        <h3 className="text-sm font-semibold">Display</h3>
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Thumbnail Previews</p>
+            <p className="text-xs text-muted-foreground">Show document previews for PDFs and images on cards instead of icons.</p>
+          </div>
+          <Switch
+            checked={localSettings.thumbnailPreviews}
+            onCheckedChange={(v) => updateLocalSettings({ thumbnailPreviews: v })}
+            aria-label="Toggle thumbnail previews"
+          />
+        </div>
+      </Section>
 
       <Section>
         <h3 className="text-sm font-semibold">Accent Color</h3>
