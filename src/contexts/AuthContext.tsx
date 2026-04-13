@@ -29,7 +29,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   isAdmin: false,
   profile: null,
-  appSettings: { registration_enabled: true, workspace_logo_url: null },
+  appSettings: { registration_enabled: true, workspace_logo_url: null, workspace_favicon_url: null },
   signOut: () => {},
   signIn: async () => {},
   refreshProfile: () => {},
@@ -78,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<api.User | null>(null);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [appSettings, setAppSettings] = useState<api.AppSettings>({ registration_enabled: true, workspace_logo_url: null });
+  const [appSettings, setAppSettings] = useState<api.AppSettings>({ registration_enabled: true, workspace_logo_url: null, workspace_favicon_url: null });
 
   useEffect(() => {
     api.getCurrentUser().then((u) => {
@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const s = await api.getSettings();
       setAppSettings(s);
     } catch {
-      setAppSettings({ registration_enabled: true, workspace_logo_url: null });
+      setAppSettings({ registration_enabled: true, workspace_logo_url: null, workspace_favicon_url: null });
     }
   }, []);
 
@@ -133,6 +133,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--ring', primaryColor);
     root.style.setProperty('--sidebar-primary', primaryColor);
   }, [profile?.accent_color]);
+
+  useEffect(() => {
+    const href = appSettings.workspace_favicon_url || '/favicon.ico';
+    let link = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = href;
+  }, [appSettings.workspace_favicon_url]);
 
   return (
     <AuthContext.Provider value={{ user, session: !!user, loading, isAdmin, profile, appSettings, signOut, signIn, refreshProfile, refreshSettings }}>

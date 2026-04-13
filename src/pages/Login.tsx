@@ -16,7 +16,7 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [registerMode, setRegisterMode] = useState(false);
-  const [settings, setSettings] = useState<api.AppSettings>({ registration_enabled: true, workspace_logo_url: null });
+  const [settings, setSettings] = useState<api.AppSettings>({ registration_enabled: true, workspace_logo_url: null, workspace_favicon_url: null });
 
   useEffect(() => {
     refreshSettings();

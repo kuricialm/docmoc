@@ -91,6 +91,11 @@ function getWorkspaceLogoUrl() {
   return row ? row.value : null;
 }
 
+function getWorkspaceFaviconUrl() {
+  const row = db.prepare("SELECT value FROM settings WHERE key='workspace_favicon_url'").get();
+  return row ? row.value : null;
+}
+
 function extFromMime(mime) {
   const map = {
     'application/pdf': 'pdf', 'text/plain': 'txt', 'text/csv': 'csv',
@@ -286,11 +291,44 @@ app.get('/api/profile/logo/:filename', (req, res) => {
   res.sendFile(logoPath);
 });
 
+app.post('/api/profile/favicon', auth, adminOnly, upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file' });
+  const ext = extFromMime(req.file.mimetype);
+  const faviconDir = path.join(DATA_DIR, 'favicons');
+  fs.mkdirSync(faviconDir, { recursive: true });
+  for (const file of fs.readdirSync(faviconDir)) {
+    fs.rmSync(path.join(faviconDir, file), { force: true });
+  }
+  const faviconPath = path.join(faviconDir, `workspace.${ext}`);
+  fs.renameSync(req.file.path, faviconPath);
+  const url = `/api/profile/favicon/workspace.${ext}`;
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('workspace_favicon_url', ?)").run(url);
+  res.json({ url });
+});
+
+app.delete('/api/profile/favicon', auth, adminOnly, (req, res) => {
+  const faviconDir = path.join(DATA_DIR, 'favicons');
+  if (fs.existsSync(faviconDir)) {
+    for (const file of fs.readdirSync(faviconDir)) {
+      fs.rmSync(path.join(faviconDir, file), { force: true });
+    }
+  }
+  db.prepare("DELETE FROM settings WHERE key = 'workspace_favicon_url'").run();
+  res.json({ ok: true });
+});
+
+app.get('/api/profile/favicon/:filename', (req, res) => {
+  const faviconPath = path.join(DATA_DIR, 'favicons', req.params.filename);
+  if (!fs.existsSync(faviconPath)) return res.status(404).json({ error: 'Not found' });
+  res.sendFile(faviconPath);
+});
+
 // ── Settings ──
 app.get('/api/settings', (req, res) => {
   const rows = db.prepare('SELECT key, value FROM settings').all();
   const settings = {};
   for (const r of rows) settings[r.key] = r.value === 'true' ? true : r.value === 'false' ? false : r.value === 'null' ? null : r.value;
+  settings.workspace_favicon_url = getWorkspaceFaviconUrl();
   res.json(settings);
 });
 

@@ -24,6 +24,8 @@ export default function SettingsPage() {
   const [emailLoading, setEmailLoading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoRemoving, setLogoRemoving] = useState(false);
+  const [faviconUploading, setFaviconUploading] = useState(false);
+  const [faviconRemoving, setFaviconRemoving] = useState(false);
   const [registrationEnabled, setRegistrationEnabled] = useState(true);
 
   useEffect(() => { setNewEmail(user?.email ?? ''); }, [user?.email]);
@@ -97,6 +99,33 @@ export default function SettingsPage() {
     setLogoRemoving(false);
   };
 
+  const handleFaviconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !isAdmin) return;
+    setFaviconUploading(true);
+    try {
+      await api.uploadFavicon(user.id, file);
+      await refreshSettings();
+      toast.success('Favicon updated');
+    } catch {
+      toast.error('Failed to upload favicon');
+    }
+    setFaviconUploading(false);
+  };
+
+  const handleFaviconRemove = async () => {
+    if (!user || !isAdmin) return;
+    setFaviconRemoving(true);
+    try {
+      await api.removeFavicon(user.id);
+      await refreshSettings();
+      toast.success('Favicon removed');
+    } catch {
+      toast.error('Failed to remove favicon');
+    }
+    setFaviconRemoving(false);
+  };
+
   const handleRegistrationToggle = async (enabled: boolean) => {
     setRegistrationEnabled(enabled);
     try {
@@ -167,6 +196,24 @@ export default function SettingsPage() {
               </Button>
               <Button variant="ghost" size="sm" className="rounded-lg" onClick={handleLogoRemove} disabled={!appSettings.workspace_logo_url || logoRemoving}>
                 {logoRemoving ? 'Removing...' : 'Remove Logo'}
+              </Button>
+            </div>
+          </div>
+          <div className="pt-2 border-t border-border/60 flex items-center gap-4">
+            {appSettings.workspace_favicon_url ? (
+              <img src={appSettings.workspace_favicon_url} alt="Favicon" className="w-8 h-8 rounded object-cover border border-border" />
+            ) : (
+              <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-muted-foreground">
+                <ImageOff className="w-4 h-4" />
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <input type="file" accept="image/x-icon,image/png,image/svg+xml,image/*" onChange={handleFaviconUpload} className="hidden" id="favicon-upload" />
+              <Button variant="outline" size="sm" className="rounded-lg" onClick={() => document.getElementById('favicon-upload')?.click()} disabled={faviconUploading}>
+                {faviconUploading ? 'Uploading...' : 'Upload Favicon'}
+              </Button>
+              <Button variant="ghost" size="sm" className="rounded-lg" onClick={handleFaviconRemove} disabled={!appSettings.workspace_favicon_url || faviconRemoving}>
+                {faviconRemoving ? 'Removing...' : 'Remove Favicon'}
               </Button>
             </div>
           </div>
