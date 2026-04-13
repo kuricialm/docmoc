@@ -223,6 +223,21 @@ export default function SettingsPage() {
       )}
 
       <Section>
+        <h3 className="text-sm font-semibold">Display</h3>
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Thumbnail Previews</p>
+            <p className="text-xs text-muted-foreground">Show document previews for PDFs and images on cards instead of icons.</p>
+          </div>
+          <Switch
+            checked={localSettings.thumbnailPreviews}
+            onCheckedChange={(v) => updateLocalSettings({ thumbnailPreviews: v })}
+            aria-label="Toggle thumbnail previews"
+          />
+        </div>
+      </Section>
+
+      <Section>
         <h3 className="text-sm font-semibold">Accent Color</h3>
         <div className="flex gap-2.5">
           {ACCENT_COLORS.map((c) => (
