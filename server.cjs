@@ -77,6 +77,14 @@ if (!regSetting) {
 // ── Helpers ──
 function uid() { return crypto.randomUUID(); }
 function now() { return new Date().toISOString(); }
+function normalizeEmail(email) {
+  if (typeof email !== 'string') return '';
+  return email.trim().toLowerCase();
+}
+
+function isValidPassword(password) {
+  return typeof password === 'string' && password.length >= 4;
+}
 
 function extFromMime(mime) {
   const map = {
@@ -134,7 +142,11 @@ function adminOnly(req, res, next) {
 
 // ── Auth routes ──
 app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
+  const email = normalizeEmail(req.body?.email);
+  const password = req.body?.password;
+  if (!email || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: 'Invalid email or password' });
@@ -163,7 +175,16 @@ app.get('/api/users', auth, adminOnly, (req, res) => {
 });
 
 app.post('/api/users', auth, adminOnly, (req, res) => {
-  const { email, password, fullName, role } = req.body;
+  const email = normalizeEmail(req.body?.email);
+  const password = req.body?.password;
+  const fullName = req.body?.fullName;
+  const role = req.body?.role;
+  if (!email || !isValidPassword(password)) {
+    return res.status(400).json({ error: 'Valid email and password are required' });
+  }
+  if (role && role !== 'admin' && role !== 'user') {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
   if (existing) return res.status(400).json({ error: 'Email already exists' });
   const hash = bcrypt.hashSync(password, 10);
@@ -197,6 +218,9 @@ app.patch('/api/profile', auth, (req, res) => {
 
 app.patch('/api/profile/password', auth, (req, res) => {
   const { newPassword } = req.body;
+  if (!isValidPassword(newPassword)) {
+    return res.status(400).json({ error: 'Password must be at least 4 characters' });
+  }
   const hash = bcrypt.hashSync(newPassword, 10);
   db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.user.id);
   res.json({ ok: true });
@@ -256,7 +280,12 @@ app.post('/api/auth/register', (req, res) => {
   if (!regEnabled || regEnabled.value !== 'true') {
     return res.status(403).json({ error: 'Registration is disabled' });
   }
-  const { email, password, fullName } = req.body;
+  const email = normalizeEmail(req.body?.email);
+  const password = req.body?.password;
+  const fullName = req.body?.fullName;
+  if (!email || !isValidPassword(password)) {
+    return res.status(400).json({ error: 'Valid email and password are required' });
+  }
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
   if (existing) return res.status(400).json({ error: 'Email already exists' });
   const hash = bcrypt.hashSync(password, 10);
@@ -481,10 +510,11 @@ app.get('/api/shared/:token/download', (req, res) => {
 const distPath = path.join(__dirname, 'dist');
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
-  app.get('*', (req, res) => {
+  app.use((req, res, next) => {
     if (!req.path.startsWith('/api')) {
-      res.sendFile(path.join(distPath, 'index.html'));
+      return res.sendFile(path.join(distPath, 'index.html'));
     }
+    next();
   });
 }
 
