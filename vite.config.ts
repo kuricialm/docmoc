@@ -9,6 +9,10 @@ function expressBackend() {
   return {
     name: 'express-backend',
     configureServer() {
+      if (process.env.VITE_USE_EXTERNAL_BACKEND === 'true') {
+        console.log('[express-backend] using external backend, skipping auto-start');
+        return;
+      }
       if (proc) return;
       proc = spawn('node', ['server.cjs'], {
         cwd: path.resolve(__dirname),
