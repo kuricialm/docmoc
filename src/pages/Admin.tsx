@@ -7,13 +7,17 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Edit2, Shield, User } from 'lucide-react';
+import { Plus, Edit2, Shield, User, KeyRound, Trash2 } from 'lucide-react';
+import { formatFileSize } from '@/lib/fileTypes';
 
 type UserProfile = {
   id: string;
   email: string;
   full_name: string | null;
   role: 'admin' | 'user';
+  suspended: boolean;
+  last_sign_in_at: string | null;
+  total_uploaded_size: number;
 };
 
 export default function AdminPage() {
@@ -27,13 +31,25 @@ export default function AdminPage() {
   const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [editUser, setEditUser] = useState<UserProfile | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
+  const [editSuspended, setEditSuspended] = useState(false);
+  const [passwordResetValue, setPasswordResetValue] = useState('');
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
       const all = await api.getUsers();
-      setUsers(all.map((u) => ({ id: u.id, email: u.email, full_name: u.fullName, role: u.role })));
+      setUsers(all.map((u) => ({
+        id: u.id,
+        email: u.email,
+        full_name: u.fullName,
+        role: u.role,
+        suspended: !!u.suspended,
+        last_sign_in_at: u.lastSignInAt || null,
+        total_uploaded_size: u.totalUploadedSize || 0,
+      })));
     } catch (err: any) { toast.error(err.message); }
     setLoading(false);
   };
@@ -55,14 +71,46 @@ export default function AdminPage() {
     setInviteLoading(false);
   };
 
-  const handleRoleChange = async () => {
+  const handleUserUpdate = async () => {
     if (!editUser) return;
     try {
-      await api.updateUserRole(editUser.id, editRole);
-      toast.success('Role updated');
+      await api.updateUser(editUser.id, {
+        fullName: editName,
+        email: editEmail,
+        role: editRole,
+        suspended: editSuspended,
+      });
+      toast.success('User updated');
       setEditUser(null);
       fetchUsers();
     } catch (err: any) { toast.error(err.message); }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!editUser) return;
+    try {
+      await api.resetUserPassword(editUser.id, passwordResetValue);
+      toast.success('Password reset successfully');
+      setPasswordResetValue('');
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!editUser) return;
+    if (!window.confirm(`Delete ${editUser.full_name || editUser.email}? This cannot be undone.`)) return;
+    try {
+      await api.deleteUser(editUser.id);
+      toast.success('User deleted');
+      setEditUser(null);
+      fetchUsers();
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const formatLastSignIn = (value: string | null) => {
+    if (!value) return 'Never';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown';
+    return date.toLocaleString();
   };
 
   return (
@@ -89,13 +137,20 @@ export default function AdminPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{u.full_name || u.email}</p>
                     <p className="text-xs text-muted-foreground/70">{u.email}</p>
+                    <p className="text-xs text-muted-foreground/70 mt-1">Last sign-in: {formatLastSignIn(u.last_sign_in_at)}</p>
+                    <p className="text-xs text-muted-foreground/70">Uploads: {formatFileSize(u.total_uploaded_size)}</p>
                   </div>
                   <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full ${u.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'}`}>
                     {u.role === 'admin' ? <Shield className="w-3 h-3" /> : <User className="w-3 h-3" />}
                     {u.role}
                   </span>
-                  <Button variant="ghost" size="sm" onClick={() => { setEditUser(u); setEditRole(u.role); }} className="gap-1.5 text-xs rounded-lg">
-                    <Edit2 className="w-3 h-3" /> Edit Role
+                  {u.suspended && (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600">
+                      Suspended
+                    </span>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => { setEditUser(u); setEditRole(u.role); setEditName(u.full_name || ''); setEditEmail(u.email); setEditSuspended(u.suspended); setPasswordResetValue(''); }} className="gap-1.5 text-xs rounded-lg">
+                    <Edit2 className="w-3 h-3" /> Edit User
                   </Button>
                 </div>
               ))}
@@ -112,15 +167,24 @@ export default function AdminPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{u.full_name || u.email}</p>
                       <p className="text-xs text-muted-foreground/70 truncate">{u.email}</p>
+                      <p className="text-xs text-muted-foreground/70 mt-1">Last sign-in: {formatLastSignIn(u.last_sign_in_at)}</p>
+                      <p className="text-xs text-muted-foreground/70">Uploads: {formatFileSize(u.total_uploaded_size)}</p>
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full ${u.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'}`}>
-                      {u.role === 'admin' ? <Shield className="w-3 h-3" /> : <User className="w-3 h-3" />}
-                      {u.role}
-                    </span>
-                    <Button variant="ghost" size="sm" onClick={() => { setEditUser(u); setEditRole(u.role); }} className="gap-1.5 text-xs rounded-lg">
-                      <Edit2 className="w-3 h-3" /> Edit Role
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full ${u.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'}`}>
+                        {u.role === 'admin' ? <Shield className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                        {u.role}
+                      </span>
+                      {u.suspended && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600">
+                          Suspended
+                        </span>
+                      )}
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => { setEditUser(u); setEditRole(u.role); setEditName(u.full_name || ''); setEditEmail(u.email); setEditSuspended(u.suspended); setPasswordResetValue(''); }} className="gap-1.5 text-xs rounded-lg">
+                      <Edit2 className="w-3 h-3" /> Edit User
                     </Button>
                   </div>
                 </div>
@@ -164,16 +228,59 @@ export default function AdminPage() {
       </Dialog>
 
       <Dialog open={!!editUser} onOpenChange={(o) => !o && setEditUser(null)}>
-        <DialogContent className="max-w-xs rounded-xl">
-          <DialogHeader><DialogTitle>Edit Role for {editUser?.full_name || editUser?.email}</DialogTitle></DialogHeader>
-          <Select value={editRole} onValueChange={(v) => setEditRole(v as 'admin' | 'user')}>
-            <SelectTrigger className="rounded-lg"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="user">User</SelectItem>
-              <SelectItem value="admin">Admin</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button onClick={handleRoleChange} className="w-full rounded-lg">Save</Button>
+        <DialogContent className="max-w-md rounded-xl">
+          <DialogHeader><DialogTitle>Edit User: {editUser?.full_name || editUser?.email}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Full Name</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-10 rounded-lg" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Email</Label>
+              <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="h-10 rounded-lg" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Role</Label>
+              <Select value={editRole} onValueChange={(v) => setEditRole(v as 'admin' | 'user')}>
+                <SelectTrigger className="rounded-lg"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="suspended"
+                type="checkbox"
+                checked={editSuspended}
+                onChange={(e) => setEditSuspended(e.target.checked)}
+              />
+              <Label htmlFor="suspended" className="text-xs">Suspend account</Label>
+            </div>
+            <Button onClick={handleUserUpdate} className="w-full rounded-lg">Save Changes</Button>
+
+            <div className="pt-2 border-t border-border/50 space-y-2">
+              <Label className="text-xs">Reset Password</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  value={passwordResetValue}
+                  minLength={4}
+                  onChange={(e) => setPasswordResetValue(e.target.value)}
+                  placeholder="New password"
+                  className="h-10 rounded-lg"
+                />
+                <Button type="button" variant="secondary" onClick={handlePasswordReset} disabled={passwordResetValue.length < 4}>
+                  <KeyRound className="w-4 h-4 mr-1" /> Reset
+                </Button>
+              </div>
+            </div>
+
+            <Button type="button" variant="destructive" onClick={handleDeleteUser} className="w-full rounded-lg">
+              <Trash2 className="w-4 h-4 mr-1.5" /> Delete User
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
