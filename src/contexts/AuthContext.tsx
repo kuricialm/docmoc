@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { useTheme } from 'next-themes';
 import * as api from '@/lib/api';
 
 type Profile = {
@@ -39,6 +40,8 @@ const AuthContext = createContext<AuthContextType>({
 export const useAuth = () => useContext(AuthContext);
 
 const DEFAULT_PRIMARY_HSL = '0 0% 0%';
+const LIGHT_PRIMARY_HSL = '0 0% 100%';
+const BLACK_HEX = '#000000';
 
 const hexToHsl = (hex: string) => {
   const n = hex.replace('#', '');
@@ -75,6 +78,7 @@ function userToProfile(u: api.User): Profile {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { resolvedTheme } = useTheme();
   const [currentUser, setCurrentUser] = useState<api.User | null>(null);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -126,13 +130,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = currentUser?.role === 'admin';
 
   useEffect(() => {
-    const accentHsl = profile?.accent_color ? hexToHsl(profile.accent_color) : null;
+    const selectedAccent = profile?.accent_color?.toLowerCase() || null;
+    const accentHsl = selectedAccent === BLACK_HEX && resolvedTheme === 'dark'
+      ? LIGHT_PRIMARY_HSL
+      : selectedAccent
+        ? hexToHsl(selectedAccent)
+        : null;
     const primaryColor = accentHsl || DEFAULT_PRIMARY_HSL;
     const root = document.documentElement;
     root.style.setProperty('--primary', primaryColor);
     root.style.setProperty('--ring', primaryColor);
     root.style.setProperty('--sidebar-primary', primaryColor);
-  }, [profile?.accent_color]);
+  }, [profile?.accent_color, resolvedTheme]);
 
   useEffect(() => {
     const href = appSettings.workspace_favicon_url || '/placeholder.svg';
