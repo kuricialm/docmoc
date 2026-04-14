@@ -8,11 +8,11 @@ import DocumentListView from '@/components/DocumentListView';
 import DocumentViewer from '@/components/DocumentViewer';
 import RenameDialog from '@/components/RenameDialog';
 import DocumentBrowseToolbar from '@/components/DocumentBrowseToolbar';
-import { FileText, Trash2, Tag } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { FileText } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import * as api from '@/lib/api';
+import BulkDocumentToolbar from '@/components/BulkDocumentToolbar';
 
 type Props = {
   viewMode: 'grid' | 'list';
@@ -150,31 +150,15 @@ export default function AllDocuments({ viewMode, onViewModeChange, search }: Pro
           onToggleSelect={toggleSelect}
         />
       )}
-      {selectedCount > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-card border rounded-xl shadow-lg px-4 py-3 flex items-center gap-3">
-          <span className="text-sm font-medium">{selectedCount} selected</span>
-          <Button variant="destructive" size="sm" className="gap-1.5" onClick={bulkDelete}>
-            <Trash2 className="w-3.5 h-3.5" /> Delete
-          </Button>
-          <div className="flex items-center gap-2">
-            <Tag className="w-3.5 h-3.5 text-muted-foreground" />
-            <select
-              className="h-8 rounded-md border bg-background px-2 text-sm"
-              value={bulkTagId}
-              onChange={(e) => setBulkTagId(e.target.value)}
-            >
-              <option value="">Choose tag</option>
-              {tags.map((tag) => (
-                <option key={tag.id} value={tag.id}>{tag.name}</option>
-              ))}
-            </select>
-            <Button size="sm" variant="secondary" onClick={bulkTag} disabled={!bulkTagId}>
-              Apply tag
-            </Button>
-          </div>
-          <Button variant="ghost" size="sm" onClick={clearSelection}>Clear</Button>
-        </div>
-      )}
+      <BulkDocumentToolbar
+        selectedCount={selectedCount}
+        tags={tags}
+        bulkTagId={bulkTagId}
+        onBulkTagIdChange={setBulkTagId}
+        onDelete={bulkDelete}
+        onApplyTag={bulkTag}
+        onClear={clearSelection}
+      />
       <DocumentViewer document={viewDoc} open={!!viewDocId} onClose={() => setViewDocId(null)} />
       <RenameDialog document={renameDoc} open={!!renameDoc} onClose={() => setRenameDoc(null)} />
     </div>

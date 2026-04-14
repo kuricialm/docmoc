@@ -40,7 +40,7 @@ db.exec(`
     file_type TEXT, file_size INTEGER, storage_path TEXT,
     starred INTEGER DEFAULT 0, trashed INTEGER DEFAULT 0, trashed_at TEXT,
     shared INTEGER DEFAULT 0, share_token TEXT,
-    uploaded_by_name_snapshot TEXT, shared_by_name_snapshot TEXT,
+    uploaded_by_name_snapshot TEXT,
     created_at TEXT, updated_at TEXT,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   );
@@ -84,25 +84,8 @@ function ensureDocumentColumn(columnName, sqlDefinition) {
 
 ensureDocumentColumn('share_expires_at', 'share_expires_at TEXT');
 ensureDocumentColumn('share_password_hash', 'share_password_hash TEXT');
-ensureDocumentColumn('shared_by_user_id', 'shared_by_user_id TEXT');
 ensureDocumentColumn('shared_by_name', 'shared_by_name TEXT');
 ensureDocumentColumn('uploaded_by_name_snapshot', 'uploaded_by_name_snapshot TEXT');
-ensureDocumentColumn('shared_by_name_snapshot', 'shared_by_name_snapshot TEXT');
-db.exec(`
-  UPDATE documents
-  SET shared_by_name = NULLIF(TRIM(shared_by_name_snapshot), '')
-  WHERE (shared_by_name IS NULL OR TRIM(shared_by_name) = '')
-    AND shared_by_name_snapshot IS NOT NULL
-`);
-db.exec(`
-  UPDATE documents
-  SET shared_by_name = (
-    SELECT COALESCE(NULLIF(TRIM(u.full_name), ''), NULLIF(TRIM(u.email), ''))
-    FROM users u
-    WHERE u.id = COALESCE(documents.shared_by_user_id, documents.user_id)
-  )
-  WHERE (shared_by_name IS NULL OR TRIM(shared_by_name) = '')
-`);
 
 // Seed admin
 const userCount = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
@@ -679,7 +662,7 @@ app.patch('/api/documents/:id/share', auth, (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Not found' });
   if (!shared) {
     if (!existing.shared) return res.json({ ok: true, share_token: null });
-    db.prepare('UPDATE documents SET shared = 0, share_token = NULL, share_expires_at = NULL, share_password_hash = NULL, shared_by_user_id = NULL, shared_by_name = NULL, updated_at = ? WHERE id = ? AND user_id = ?')
+    db.prepare('UPDATE documents SET shared = 0, share_token = NULL, share_expires_at = NULL, share_password_hash = NULL, shared_by_name = NULL, updated_at = ? WHERE id = ? AND user_id = ?')
       .run(now(), req.params.id, req.user.id);
     logDocumentEvent(req.params.id, req.user.id, 'share_disabled');
     return res.json({ ok: true, share_token: null });
@@ -717,18 +700,16 @@ app.patch('/api/documents/:id/share', auth, (req, res) => {
   }
 
   const shareToken = existing.share_token || uid();
-  const sharedByName = (typeof req.user.full_name === 'string' && req.user.full_name.trim())
-    ? req.user.full_name.trim()
-    : (typeof req.user.email === 'string' && req.user.email.trim())
-      ? req.user.email.trim()
-      : req.user.id;
+  const sharedByName = typeof req.user.full_name === 'string' ? req.user.full_name.trim() : '';
+  if (!sharedByName) {
+    return res.status(400).json({ error: 'Full name is required before sharing' });
+  }
   db.prepare(`
     UPDATE documents
     SET shared = 1,
         share_token = ?,
         share_expires_at = ?,
         share_password_hash = ?,
-        shared_by_user_id = ?,
         shared_by_name = ?,
         updated_at = ?
     WHERE id = ? AND user_id = ?
@@ -736,7 +717,6 @@ app.patch('/api/documents/:id/share', auth, (req, res) => {
     shareToken,
     shareExpiresAt,
     sharePasswordHash,
-    req.user.id,
     sharedByName,
     now(),
     req.params.id,
@@ -944,7 +924,7 @@ app.get('/api/shared/:token', (req, res) => {
     SELECT t.id, t.name, t.color FROM tags t
     JOIN document_tags dt ON dt.tag_id = t.id WHERE dt.document_id = ?
   `).all(doc.id);
-  const { uploaded_by_name_snapshot, share_password_hash, shared_by_user_id, ...safeDoc } = doc;
+  const { uploaded_by_name_snapshot, share_password_hash, ...safeDoc } = doc;
   res.json({
     ...safeDoc,
     name: normalizeUploadedFilename(doc.name),
