@@ -1,4 +1,5 @@
 import { FileText, Clock, Share2, Trash2, HardDrive } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Document } from '@/hooks/useDocuments';
 import { formatFileSize } from '@/lib/fileTypes';
 
@@ -16,18 +17,19 @@ export default function DashboardStats({ documents }: Props) {
   const totalUploadedSize = documents.filter((d) => !d.trashed).reduce((sum, d) => sum + d.file_size, 0);
 
   const stats = [
-    { label: 'Total Documents', value: total, icon: FileText },
-    { label: 'Recent Uploads', value: recent, icon: Clock },
-    { label: 'Shared by Me', value: shared, icon: Share2 },
-    { label: 'In Trash', value: trashed, icon: Trash2 },
-    { label: 'Uploaded Size', value: formatFileSize(totalUploadedSize), icon: HardDrive },
+    { label: 'Total Documents', value: total, icon: FileText, path: '/' },
+    { label: 'Recent Uploads', value: recent, icon: Clock, path: '/recent' },
+    { label: 'Shared by Me', value: shared, icon: Share2, path: '/shared' },
+    { label: 'In Trash', value: trashed, icon: Trash2, path: '/trash' },
+    { label: 'Uploaded Size', value: formatFileSize(totalUploadedSize), icon: HardDrive, path: '/settings' },
   ];
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
       {stats.map((stat) => (
-        <div
+        <Link
           key={stat.label}
+          to={stat.path}
           className="bg-muted/50 rounded-xl p-4 sm:p-5 flex items-center gap-3 sm:gap-4 hover:bg-muted transition-colors duration-150"
         >
           <div className="p-2.5 rounded-xl bg-background">
@@ -37,7 +39,7 @@ export default function DashboardStats({ documents }: Props) {
             <p className="text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums">{stat.value}</p>
             <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">{stat.label}</p>
           </div>
-        </div>
+        </Link>
       ))}
     </div>
   );
