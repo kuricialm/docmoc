@@ -84,22 +84,11 @@ function ensureDocumentColumn(columnName, sqlDefinition) {
 
 ensureDocumentColumn('share_expires_at', 'share_expires_at TEXT');
 ensureDocumentColumn('share_password_hash', 'share_password_hash TEXT');
-ensureDocumentColumn('shared_by_name', 'shared_by_name TEXT');
 ensureDocumentColumn('uploaded_by_name_snapshot', 'uploaded_by_name_snapshot TEXT');
 db.exec(`
   UPDATE users
   SET full_name = email
   WHERE full_name IS NULL OR TRIM(full_name) = ''
-`);
-db.exec(`
-  UPDATE documents
-  SET shared_by_name = (
-    SELECT u.full_name
-    FROM users u
-    WHERE u.id = documents.user_id
-  )
-  WHERE shared = 1
-    AND (shared_by_name IS NULL OR TRIM(shared_by_name) = '')
 `);
 
 // Seed admin
@@ -557,12 +546,11 @@ app.get('/api/documents', auth, (req, res) => {
   docs = docs.map(d => {
     const { share_password_hash, ...rest } = d;
     const uploadedByName = rest.uploaded_by_name_snapshot || req.user.full_name || req.user.email || null;
-    const sharedByName = rest.shared_by_name || null;
     return ({
       ...rest,
       name: normalizeUploadedFilename(rest.name),
       uploaded_by_name: uploadedByName,
-      shared_by_name: sharedByName,
+      shared_by_name: uploadedByName,
       starred: !!d.starred,
       trashed: !!d.trashed,
       shared: !!d.shared,
@@ -598,10 +586,10 @@ app.post('/api/documents/upload', auth, upload.single('file'), (req, res) => {
     created_at: now(), updated_at: now(),
   };
   db.prepare(`INSERT INTO documents (id, user_id, name, file_type, file_size, storage_path,
-    starred, trashed, trashed_at, shared, share_token, shared_by_name, uploaded_by_name_snapshot, created_at, updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    starred, trashed, trashed_at, shared, share_token, uploaded_by_name_snapshot, created_at, updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(doc.id, doc.user_id, doc.name, doc.file_type, doc.file_size, doc.storage_path,
-      doc.starred, doc.trashed, doc.trashed_at, doc.shared, doc.share_token, doc.shared_by_name, doc.uploaded_by_name_snapshot, doc.created_at, doc.updated_at);
+      doc.starred, doc.trashed, doc.trashed_at, doc.shared, doc.share_token, doc.uploaded_by_name_snapshot, doc.created_at, doc.updated_at);
   logDocumentEvent(doc.id, req.user.id, 'uploaded', { name: doc.name });
 
   res.json({
@@ -677,7 +665,7 @@ app.patch('/api/documents/:id/share', auth, (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Not found' });
   if (!shared) {
     if (!existing.shared) return res.json({ ok: true, share_token: null });
-    db.prepare('UPDATE documents SET shared = 0, share_token = NULL, share_expires_at = NULL, share_password_hash = NULL, shared_by_name = NULL, updated_at = ? WHERE id = ? AND user_id = ?')
+    db.prepare('UPDATE documents SET shared = 0, share_token = NULL, share_expires_at = NULL, share_password_hash = NULL, updated_at = ? WHERE id = ? AND user_id = ?')
       .run(now(), req.params.id, req.user.id);
     logDocumentEvent(req.params.id, req.user.id, 'share_disabled');
     return res.json({ ok: true, share_token: null });
@@ -725,14 +713,12 @@ app.patch('/api/documents/:id/share', auth, (req, res) => {
         share_token = ?,
         share_expires_at = ?,
         share_password_hash = ?,
-        shared_by_name = ?,
         updated_at = ?
     WHERE id = ? AND user_id = ?
   `).run(
     shareToken,
     shareExpiresAt,
     sharePasswordHash,
-    sharedByName,
     now(),
     req.params.id,
     req.user.id,
@@ -944,7 +930,7 @@ app.get('/api/shared/:token', (req, res) => {
     ...safeDoc,
     name: normalizeUploadedFilename(doc.name),
     uploaded_by_name: doc.uploaded_by_name_snapshot || null,
-    shared_by_name: doc.shared_by_name || null,
+    shared_by_name: doc.uploaded_by_name_snapshot || null,
     starred: !!doc.starred,
     trashed: false,
     shared: true,
