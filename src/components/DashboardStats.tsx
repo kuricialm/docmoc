@@ -1,5 +1,6 @@
-import { FileText, Clock, Share2, Trash2 } from 'lucide-react';
+import { FileText, Clock, Share2, Trash2, HardDrive } from 'lucide-react';
 import { Document } from '@/hooks/useDocuments';
+import { formatFileSize } from '@/lib/fileTypes';
 
 type Props = {
   documents: Document[];
@@ -12,16 +13,18 @@ export default function DashboardStats({ documents }: Props) {
   ).length;
   const shared = documents.filter((d) => !d.trashed && d.shared).length;
   const trashed = documents.filter((d) => d.trashed).length;
+  const totalUploadedSize = documents.filter((d) => !d.trashed).reduce((sum, d) => sum + d.file_size, 0);
 
   const stats = [
     { label: 'Total Documents', value: total, icon: FileText },
     { label: 'Recent Uploads', value: recent, icon: Clock },
     { label: 'Shared by Me', value: shared, icon: Share2 },
     { label: 'In Trash', value: trashed, icon: Trash2 },
+    { label: 'Uploaded Size', value: formatFileSize(totalUploadedSize), icon: HardDrive },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
       {stats.map((stat) => (
         <div
           key={stat.label}

@@ -75,6 +75,16 @@ db.exec(`
     ON document_history (document_id, created_at DESC);
 `);
 
+function ensureUserColumn(columnName, sqlDefinition) {
+  const cols = db.prepare('PRAGMA table_info(users)').all();
+  if (!cols.some((c) => c.name === columnName)) {
+    db.exec(`ALTER TABLE users ADD COLUMN ${sqlDefinition}`);
+  }
+}
+
+ensureUserColumn('suspended', 'suspended INTEGER DEFAULT 0');
+ensureUserColumn('last_sign_in_at', 'last_sign_in_at TEXT');
+
 function ensureDocumentColumn(columnName, sqlDefinition) {
   const cols = db.prepare('PRAGMA table_info(documents)').all();
   if (!cols.some((c) => c.name === columnName)) {
@@ -298,8 +308,9 @@ function auth(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
   const session = db.prepare('SELECT user_id FROM sessions WHERE token = ?').get(token);
   if (!session) return res.status(401).json({ error: 'Invalid session' });
-  const user = db.prepare('SELECT id, email, full_name, role, accent_color, avatar_url, workspace_logo_url, created_at FROM users WHERE id = ?').get(session.user_id);
+  const user = db.prepare('SELECT id, email, full_name, role, accent_color, avatar_url, workspace_logo_url, created_at, suspended, last_sign_in_at FROM users WHERE id = ?').get(session.user_id);
   if (!user) return res.status(401).json({ error: 'User not found' });
+  if (user.suspended) return res.status(403).json({ error: 'Account suspended' });
   user.workspace_logo_url = getWorkspaceLogoUrl();
   req.user = user;
   next();
@@ -322,8 +333,13 @@ app.post('/api/auth/login', (req, res) => {
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
+  if (user.suspended) {
+    return res.status(403).json({ error: 'Account suspended' });
+  }
   const token = uid();
-  db.prepare('INSERT INTO sessions (token, user_id, created_at) VALUES (?,?,?)').run(token, user.id, now());
+  const signedInAt = now();
+  db.prepare('INSERT INTO sessions (token, user_id, created_at) VALUES (?,?,?)').run(token, user.id, signedInAt);
+  db.prepare('UPDATE users SET last_sign_in_at = ? WHERE id = ?').run(signedInAt, user.id);
   const maxAge = rememberMe ? 30 * 86400000 : undefined; // 30 days or session-only
   res.cookie('session', token, sessionCookieOpts(req, maxAge));
   res.json({ id: user.id, email: user.email, fullName: user.full_name, role: user.role, accentColor: user.accent_color, avatarUrl: user.avatar_url, workspaceLogoUrl: getWorkspaceLogoUrl() });
@@ -342,7 +358,21 @@ app.get('/api/auth/me', auth, (req, res) => {
 
 // ── Users (admin) ──
 app.get('/api/users', auth, adminOnly, (req, res) => {
-  const users = db.prepare('SELECT id, email, full_name, role, created_at FROM users').all();
+  const users = db.prepare(`
+    SELECT
+      u.id,
+      u.email,
+      u.full_name,
+      u.role,
+      u.created_at,
+      u.suspended,
+      u.last_sign_in_at,
+      COALESCE(SUM(d.file_size), 0) AS total_uploaded_size
+    FROM users u
+    LEFT JOIN documents d ON d.user_id = u.id
+    GROUP BY u.id
+    ORDER BY u.created_at ASC
+  `).all();
   res.json(users);
 });
 
@@ -368,7 +398,74 @@ app.post('/api/users', auth, adminOnly, (req, res) => {
 
 app.patch('/api/users/:id/role', auth, adminOnly, (req, res) => {
   const { role } = req.body;
+  if (role !== 'admin' && role !== 'user') return res.status(400).json({ error: 'Invalid role' });
   db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, req.params.id);
+  res.json({ ok: true });
+});
+
+app.patch('/api/users/:id', auth, adminOnly, (req, res) => {
+  const { fullName, email, role, suspended } = req.body;
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+
+  const sets = [];
+  const values = [];
+
+  if (fullName !== undefined) {
+    if (typeof fullName !== 'string' || !fullName.trim()) return res.status(400).json({ error: 'Name is required' });
+    sets.push('full_name = ?');
+    values.push(fullName.trim());
+  }
+  if (email !== undefined) {
+    const normalized = normalizeEmail(email);
+    if (!normalized || !normalized.includes('@')) return res.status(400).json({ error: 'Valid email is required' });
+    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(normalized);
+    if (existing && existing.id !== req.params.id) return res.status(409).json({ error: 'Email already exists' });
+    sets.push('email = ?');
+    values.push(normalized);
+  }
+  if (role !== undefined) {
+    if (role !== 'admin' && role !== 'user') return res.status(400).json({ error: 'Invalid role' });
+    sets.push('role = ?');
+    values.push(role);
+  }
+  if (suspended !== undefined) {
+    sets.push('suspended = ?');
+    values.push(suspended ? 1 : 0);
+  }
+
+  if (!sets.length) return res.status(400).json({ error: 'No changes provided' });
+
+  values.push(req.params.id);
+  db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+  if (suspended) {
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(req.params.id);
+  }
+  res.json({ ok: true });
+});
+
+app.patch('/api/users/:id/password', auth, adminOnly, (req, res) => {
+  const { newPassword } = req.body;
+  if (!isValidPassword(newPassword)) {
+    return res.status(400).json({ error: 'Password must be at least 4 characters' });
+  }
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+
+  const hash = bcrypt.hashSync(newPassword, 10);
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, req.params.id);
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/users/:id', auth, adminOnly, (req, res) => {
+  if (req.params.id === req.user.id) {
+    return res.status(400).json({ error: 'You cannot delete your own account' });
+  }
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(req.params.id);
   res.json({ ok: true });
 });
 
