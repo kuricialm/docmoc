@@ -1,5 +1,6 @@
 services:
   docmoc:
+    container_name: docmoc
     image: ${DOCMOC_IMAGE:-egsa/docmoc-docker:latest}
     pull_policy: always
     ports:
