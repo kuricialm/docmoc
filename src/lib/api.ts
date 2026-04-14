@@ -67,7 +67,30 @@ export type AppSettings = {
 };
 
 // ---------- Fetch helper ----------
-const BASE = '/api';
+const RAW_API_BASE = import.meta.env.VITE_API_BASE_URL?.trim();
+const BASE = RAW_API_BASE
+  ? `${RAW_API_BASE.replace(/\/$/, '')}${RAW_API_BASE.endsWith('/api') ? '' : '/api'}`
+  : '/api';
+
+async function readJsonBody(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function getResponseErrorMessage(res: Response, body: any): string {
+  if (body?.error && typeof body.error === 'string') return body.error;
+  if (body?.message && typeof body.message === 'string') return body.message;
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    return 'API response was not JSON. Verify your frontend is pointing to the Docmoc backend (/api).';
+  }
+  return `Request failed: ${res.status}`;
+}
 
 async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -75,11 +98,18 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...(opts?.headers || {}) },
     ...opts,
   });
+  const body = await readJsonBody(res);
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed: ${res.status}`);
+    throw new Error(getResponseErrorMessage(res, body));
   }
-  return res.json();
+  if (body === null) {
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error('API response was not JSON. Verify your frontend is pointing to the Docmoc backend (/api).');
+    }
+    return {} as T;
+  }
+  return body as T;
 }
 
 function mapUser(u: any): User {
@@ -233,11 +263,12 @@ export async function uploadDocument(_userId: string, file: File): Promise<DocRe
     credentials: 'include',
     body: formData,
   });
+  const body = await readJsonBody(res);
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || 'Upload failed');
+    throw new Error(getResponseErrorMessage(res, body) || 'Upload failed');
   }
-  return res.json();
+  if (!body) throw new Error('Upload failed: empty response from API');
+  return body as DocRecord & { tags: TagRecord[] };
 }
 
 export async function getDocuments(_userId: string, filter?: DocFilter): Promise<(DocRecord & { tags: TagRecord[] })[]> {
@@ -392,8 +423,9 @@ export async function uploadLogo(_userId: string, file: File): Promise<string> {
     credentials: 'include',
     body: formData,
   });
-  if (!res.ok) throw new Error('Logo upload failed');
-  const data = await res.json();
+  const data = await readJsonBody(res);
+  if (!res.ok) throw new Error(getResponseErrorMessage(res, data) || 'Logo upload failed');
+  if (!data?.url) throw new Error('Logo upload failed: empty response from API');
   return data.url;
 }
 
@@ -411,8 +443,9 @@ export async function uploadFavicon(_userId: string, file: File): Promise<string
     credentials: 'include',
     body: formData,
   });
-  if (!res.ok) throw new Error('Favicon upload failed');
-  const data = await res.json();
+  const data = await readJsonBody(res);
+  if (!res.ok) throw new Error(getResponseErrorMessage(res, data) || 'Favicon upload failed');
+  if (!data?.url) throw new Error('Favicon upload failed: empty response from API');
   return data.url;
 }
 
