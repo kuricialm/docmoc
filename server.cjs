@@ -84,6 +84,7 @@ function ensureUserColumn(columnName, sqlDefinition) {
 
 ensureUserColumn('suspended', 'suspended INTEGER DEFAULT 0');
 ensureUserColumn('last_sign_in_at', 'last_sign_in_at TEXT');
+ensureUserColumn('upload_quota_bytes', 'upload_quota_bytes INTEGER');
 
 function ensureDocumentColumn(columnName, sqlDefinition) {
   const cols = db.prepare('PRAGMA table_info(documents)').all();
@@ -207,6 +208,19 @@ function extFromMime(mime) {
   return parts[1] || 'bin';
 }
 
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let idx = 0;
+  while (value >= 1024 && idx < units.length - 1) {
+    value /= 1024;
+    idx += 1;
+  }
+  const rounded = value >= 10 || idx === 0 ? value.toFixed(0) : value.toFixed(1);
+  return `${rounded} ${units[idx]}`;
+}
+
 function logDocumentEvent(documentId, userId, action, details = null) {
   const serializedDetails = details && typeof details === 'object' ? JSON.stringify(details) : null;
   db.prepare('INSERT INTO document_history (id, document_id, user_id, action, details, created_at) VALUES (?,?,?,?,?,?)')
@@ -308,7 +322,7 @@ function auth(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
   const session = db.prepare('SELECT user_id FROM sessions WHERE token = ?').get(token);
   if (!session) return res.status(401).json({ error: 'Invalid session' });
-  const user = db.prepare('SELECT id, email, full_name, role, accent_color, avatar_url, workspace_logo_url, created_at, suspended, last_sign_in_at FROM users WHERE id = ?').get(session.user_id);
+  const user = db.prepare('SELECT id, email, full_name, role, accent_color, avatar_url, workspace_logo_url, created_at, suspended, last_sign_in_at, upload_quota_bytes FROM users WHERE id = ?').get(session.user_id);
   if (!user) return res.status(401).json({ error: 'User not found' });
   if (user.suspended) return res.status(403).json({ error: 'Account suspended' });
   user.workspace_logo_url = getWorkspaceLogoUrl();
@@ -342,7 +356,7 @@ app.post('/api/auth/login', (req, res) => {
   db.prepare('UPDATE users SET last_sign_in_at = ? WHERE id = ?').run(signedInAt, user.id);
   const maxAge = rememberMe ? 30 * 86400000 : undefined; // 30 days or session-only
   res.cookie('session', token, sessionCookieOpts(req, maxAge));
-  res.json({ id: user.id, email: user.email, fullName: user.full_name, role: user.role, accentColor: user.accent_color, avatarUrl: user.avatar_url, workspaceLogoUrl: getWorkspaceLogoUrl() });
+  res.json({ id: user.id, email: user.email, fullName: user.full_name, role: user.role, accentColor: user.accent_color, avatarUrl: user.avatar_url, workspaceLogoUrl: getWorkspaceLogoUrl(), upload_quota_bytes: user.upload_quota_bytes });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -367,6 +381,7 @@ app.get('/api/users', auth, adminOnly, (req, res) => {
       u.created_at,
       u.suspended,
       u.last_sign_in_at,
+      u.upload_quota_bytes,
       COALESCE(SUM(d.file_size), 0) AS total_uploaded_size
     FROM users u
     LEFT JOIN documents d ON d.user_id = u.id
@@ -404,7 +419,7 @@ app.patch('/api/users/:id/role', auth, adminOnly, (req, res) => {
 });
 
 app.patch('/api/users/:id', auth, adminOnly, (req, res) => {
-  const { fullName, email, role, suspended } = req.body;
+  const { fullName, email, role, suspended, uploadQuotaBytes } = req.body;
   const target = db.prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
   if (!target) return res.status(404).json({ error: 'User not found' });
 
@@ -432,6 +447,18 @@ app.patch('/api/users/:id', auth, adminOnly, (req, res) => {
   if (suspended !== undefined) {
     sets.push('suspended = ?');
     values.push(suspended ? 1 : 0);
+  }
+  if (uploadQuotaBytes !== undefined) {
+    if (uploadQuotaBytes === null || uploadQuotaBytes === '') {
+      sets.push('upload_quota_bytes = NULL');
+    } else {
+      const parsed = Number.parseInt(String(uploadQuotaBytes), 10);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return res.status(400).json({ error: 'Upload quota must be a non-negative number of bytes or empty for unlimited' });
+      }
+      sets.push('upload_quota_bytes = ?');
+      values.push(parsed);
+    }
   }
 
   if (!sets.length) return res.status(400).json({ error: 'No changes provided' });
@@ -481,7 +508,7 @@ app.patch('/api/profile', auth, (req, res) => {
     vals.push(req.user.id);
     db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
   }
-  const updated = db.prepare('SELECT id, email, full_name, role, accent_color, avatar_url, workspace_logo_url FROM users WHERE id = ?').get(req.user.id);
+  const updated = db.prepare('SELECT id, email, full_name, role, accent_color, avatar_url, workspace_logo_url, upload_quota_bytes FROM users WHERE id = ?').get(req.user.id);
   res.json(updated);
 });
 
@@ -677,6 +704,18 @@ app.get('/api/documents', auth, (req, res) => {
 
 app.post('/api/documents/upload', auth, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file' });
+  const quotaBytes = typeof req.user.upload_quota_bytes === 'number' ? req.user.upload_quota_bytes : null;
+  if (quotaBytes !== null) {
+    const usage = db.prepare('SELECT COALESCE(SUM(file_size), 0) AS total FROM documents WHERE user_id = ?').get(req.user.id);
+    const currentUsage = Number(usage?.total || 0);
+    if (currentUsage + req.file.size > quotaBytes) {
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+      const remaining = Math.max(0, quotaBytes - currentUsage);
+      return res.status(413).json({
+        error: `Upload quota exceeded. Remaining storage: ${formatBytes(remaining)} of ${formatBytes(quotaBytes)}.`,
+      });
+    }
+  }
   const id = uid();
   const ext = extFromMime(req.file.mimetype);
   const userDir = path.join(UPLOADS_DIR, req.user.id);

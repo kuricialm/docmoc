@@ -7,6 +7,7 @@ export type User = {
   suspended?: boolean;
   lastSignInAt?: string | null;
   totalUploadedSize?: number;
+  uploadQuotaBytes?: number | null;
   accentColor: string | null;
   avatarUrl: string | null;
   workspaceLogoUrl: string | null;
@@ -126,6 +127,7 @@ function mapUser(u: any): User {
     suspended: !!u.suspended,
     lastSignInAt: u.last_sign_in_at || u.lastSignInAt || null,
     totalUploadedSize: typeof u.total_uploaded_size === 'number' ? u.total_uploaded_size : (typeof u.totalUploadedSize === 'number' ? u.totalUploadedSize : undefined),
+    uploadQuotaBytes: typeof u.upload_quota_bytes === 'number' ? u.upload_quota_bytes : (typeof u.uploadQuotaBytes === 'number' ? u.uploadQuotaBytes : null),
     accentColor: u.accent_color || u.accentColor || null,
     avatarUrl: u.avatar_url || u.avatarUrl || null,
     workspaceLogoUrl: u.workspace_logo_url || u.workspaceLogoUrl || null,
@@ -199,7 +201,7 @@ export async function updateUserRole(userId: string, role: 'admin' | 'user'): Pr
 
 export async function updateUser(
   userId: string,
-  data: Partial<Pick<User, 'fullName' | 'email' | 'role' | 'suspended'>>
+  data: Partial<Pick<User, 'fullName' | 'email' | 'role' | 'suspended' | 'uploadQuotaBytes'>>
 ): Promise<void> {
   await apiFetch(`/users/${userId}`, {
     method: 'PATCH',

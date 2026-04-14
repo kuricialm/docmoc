@@ -18,10 +18,11 @@ type UserProfile = {
   suspended: boolean;
   last_sign_in_at: string | null;
   total_uploaded_size: number;
+  upload_quota_bytes: number | null;
 };
 
 export default function AdminPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user, refreshProfile } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
@@ -35,6 +36,7 @@ export default function AdminPage() {
   const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
   const [editSuspended, setEditSuspended] = useState(false);
+  const [editQuotaGb, setEditQuotaGb] = useState('');
   const [passwordResetValue, setPasswordResetValue] = useState('');
 
   const fetchUsers = async () => {
@@ -49,6 +51,7 @@ export default function AdminPage() {
         suspended: !!u.suspended,
         last_sign_in_at: u.lastSignInAt || null,
         total_uploaded_size: u.totalUploadedSize || 0,
+        upload_quota_bytes: u.uploadQuotaBytes ?? null,
       })));
     } catch (err: any) { toast.error(err.message); }
     setLoading(false);
@@ -73,14 +76,29 @@ export default function AdminPage() {
 
   const handleUserUpdate = async () => {
     if (!editUser) return;
+    let uploadQuotaBytes: number | null | undefined = undefined;
+    if (editQuotaGb.trim() === '') {
+      uploadQuotaBytes = null;
+    } else {
+      const parsedGb = Number(editQuotaGb);
+      if (!Number.isFinite(parsedGb) || parsedGb < 0) {
+        toast.error('Upload quota must be a number of 0 GB or more, or leave it empty for unlimited.');
+        return;
+      }
+      uploadQuotaBytes = Math.floor(parsedGb * 1024 * 1024 * 1024);
+    }
     try {
       await api.updateUser(editUser.id, {
         fullName: editName,
         email: editEmail,
         role: editRole,
         suspended: editSuspended,
+        uploadQuotaBytes,
       });
       toast.success('User updated');
+      if (editUser.id === user?.id) {
+        await refreshProfile();
+      }
       setEditUser(null);
       fetchUsers();
     } catch (err: any) { toast.error(err.message); }
@@ -113,6 +131,16 @@ export default function AdminPage() {
     return date.toLocaleString();
   };
 
+  const openEditUser = (u: UserProfile) => {
+    setEditUser(u);
+    setEditRole(u.role);
+    setEditName(u.full_name || '');
+    setEditEmail(u.email);
+    setEditSuspended(u.suspended);
+    setEditQuotaGb(u.upload_quota_bytes === null ? '' : String(Number((u.upload_quota_bytes / (1024 * 1024 * 1024)).toFixed(2))));
+    setPasswordResetValue('');
+  };
+
   return (
     <div className="max-w-3xl space-y-6 animate-page-in">
       <div className="flex items-center justify-between">
@@ -139,6 +167,7 @@ export default function AdminPage() {
                     <p className="text-xs text-muted-foreground/70">{u.email}</p>
                     <p className="text-xs text-muted-foreground/70 mt-1">Last sign-in: {formatLastSignIn(u.last_sign_in_at)}</p>
                     <p className="text-xs text-muted-foreground/70">Uploads: {formatFileSize(u.total_uploaded_size)}</p>
+                    <p className="text-xs text-muted-foreground/70">Quota: {u.upload_quota_bytes === null ? 'Unlimited' : formatFileSize(u.upload_quota_bytes)}</p>
                   </div>
                   <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full ${u.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'}`}>
                     {u.role === 'admin' ? <Shield className="w-3 h-3" /> : <User className="w-3 h-3" />}
@@ -149,7 +178,7 @@ export default function AdminPage() {
                       Suspended
                     </span>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => { setEditUser(u); setEditRole(u.role); setEditName(u.full_name || ''); setEditEmail(u.email); setEditSuspended(u.suspended); setPasswordResetValue(''); }} className="gap-1.5 text-xs rounded-lg">
+                  <Button variant="ghost" size="sm" onClick={() => openEditUser(u)} className="gap-1.5 text-xs rounded-lg">
                     <Edit2 className="w-3 h-3" /> Edit User
                   </Button>
                 </div>
@@ -169,6 +198,7 @@ export default function AdminPage() {
                       <p className="text-xs text-muted-foreground/70 truncate">{u.email}</p>
                       <p className="text-xs text-muted-foreground/70 mt-1">Last sign-in: {formatLastSignIn(u.last_sign_in_at)}</p>
                       <p className="text-xs text-muted-foreground/70">Uploads: {formatFileSize(u.total_uploaded_size)}</p>
+                      <p className="text-xs text-muted-foreground/70">Quota: {u.upload_quota_bytes === null ? 'Unlimited' : formatFileSize(u.upload_quota_bytes)}</p>
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
@@ -183,7 +213,7 @@ export default function AdminPage() {
                         </span>
                       )}
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => { setEditUser(u); setEditRole(u.role); setEditName(u.full_name || ''); setEditEmail(u.email); setEditSuspended(u.suspended); setPasswordResetValue(''); }} className="gap-1.5 text-xs rounded-lg">
+                    <Button variant="ghost" size="sm" onClick={() => openEditUser(u)} className="gap-1.5 text-xs rounded-lg">
                       <Edit2 className="w-3 h-3" /> Edit User
                     </Button>
                   </div>
@@ -228,39 +258,67 @@ export default function AdminPage() {
       </Dialog>
 
       <Dialog open={!!editUser} onOpenChange={(o) => !o && setEditUser(null)}>
-        <DialogContent className="max-w-md rounded-xl">
+        <DialogContent className="max-w-xl rounded-xl">
           <DialogHeader><DialogTitle>Edit User: {editUser?.full_name || editUser?.email}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Full Name</Label>
-              <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-10 rounded-lg" />
+          <div className="space-y-5">
+            <div className="rounded-lg border border-border/60 p-4 space-y-4">
+              <p className="text-xs font-medium text-muted-foreground">Profile</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label className="text-xs">Full Name</Label>
+                  <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-10 rounded-lg" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Email</Label>
+                  <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="h-10 rounded-lg" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Role</Label>
+                  <Select value={editRole} onValueChange={(v) => setEditRole(v as 'admin' | 'user')}>
+                    <SelectTrigger className="h-10 rounded-lg"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="user">User</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Email</Label>
-              <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="h-10 rounded-lg" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Role</Label>
-              <Select value={editRole} onValueChange={(v) => setEditRole(v as 'admin' | 'user')}>
-                <SelectTrigger className="rounded-lg"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">User</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                id="suspended"
-                type="checkbox"
-                checked={editSuspended}
-                onChange={(e) => setEditSuspended(e.target.checked)}
-              />
-              <Label htmlFor="suspended" className="text-xs">Suspend account</Label>
-            </div>
-            <Button onClick={handleUserUpdate} className="w-full rounded-lg">Save Changes</Button>
 
-            <div className="pt-2 border-t border-border/50 space-y-2">
+            <div className="rounded-lg border border-border/60 p-4 space-y-3">
+              <p className="text-xs font-medium text-muted-foreground">Storage</p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Upload Quota (GB)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={editQuotaGb}
+                  onChange={(e) => setEditQuotaGb(e.target.value)}
+                  placeholder="Leave empty for unlimited"
+                  className="h-10 rounded-lg"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Current uploads: {formatFileSize(editUser?.total_uploaded_size || 0)}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border/60 p-4 space-y-3">
+              <p className="text-xs font-medium text-muted-foreground">Account Controls</p>
+              <div className="flex items-center gap-2">
+                <input
+                  id="suspended"
+                  type="checkbox"
+                  checked={editSuspended}
+                  onChange={(e) => setEditSuspended(e.target.checked)}
+                />
+                <Label htmlFor="suspended" className="text-xs">Suspend account</Label>
+              </div>
+              <Button onClick={handleUserUpdate} className="w-full rounded-lg">Save Changes</Button>
+            </div>
+
+            <div className="pt-1 border-t border-border/50 space-y-2">
               <Label className="text-xs">Reset Password</Label>
               <div className="flex gap-2">
                 <Input

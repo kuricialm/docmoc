@@ -2,26 +2,31 @@ import { FileText, Clock, Share2, Trash2, HardDrive } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Document } from '@/hooks/useDocuments';
 import { formatFileSize } from '@/lib/fileTypes';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Props = {
   documents: Document[];
 };
 
 export default function DashboardStats({ documents }: Props) {
+  const { user } = useAuth();
   const total = documents.filter((d) => !d.trashed).length;
   const recent = documents.filter(
     (d) => !d.trashed && new Date(d.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
   ).length;
   const shared = documents.filter((d) => !d.trashed && d.shared).length;
   const trashed = documents.filter((d) => d.trashed).length;
-  const totalUploadedSize = documents.filter((d) => !d.trashed).reduce((sum, d) => sum + d.file_size, 0);
+  const totalUploadedSize = documents.reduce((sum, d) => sum + d.file_size, 0);
+  const availableStorage = user?.uploadQuotaBytes == null
+    ? 'Unlimited'
+    : formatFileSize(Math.max(0, user.uploadQuotaBytes - totalUploadedSize));
 
   const stats = [
     { label: 'Total Documents', value: total, icon: FileText, path: '/' },
     { label: 'Recent Uploads', value: recent, icon: Clock, path: '/recent' },
     { label: 'Shared by Me', value: shared, icon: Share2, path: '/shared' },
     { label: 'In Trash', value: trashed, icon: Trash2, path: '/trash' },
-    { label: 'Uploaded Size', value: formatFileSize(totalUploadedSize), icon: HardDrive, path: '/settings' },
+    { label: 'Available Storage', value: availableStorage, icon: HardDrive, path: '/settings' },
   ];
 
   return (

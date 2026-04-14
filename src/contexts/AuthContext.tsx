@@ -12,7 +12,7 @@ type Profile = {
 };
 
 type AuthContextType = {
-  user: { id: string; email: string } | null;
+  user: { id: string; email: string; uploadQuotaBytes: number | null } | null;
   session: boolean;
   loading: boolean;
   isAdmin: boolean;
@@ -20,7 +20,7 @@ type AuthContextType = {
   appSettings: api.AppSettings;
   signOut: () => void;
   signIn: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
-  refreshProfile: () => void;
+  refreshProfile: () => Promise<void>;
   refreshSettings: () => Promise<void>;
 };
 
@@ -33,7 +33,7 @@ const AuthContext = createContext<AuthContextType>({
   appSettings: { registration_enabled: true, workspace_logo_url: null, workspace_favicon_url: null },
   signOut: () => {},
   signIn: async () => {},
-  refreshProfile: () => {},
+  refreshProfile: async () => {},
   refreshSettings: async () => {},
 });
 
@@ -126,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [currentUser]);
 
-  const user = currentUser ? { id: currentUser.id, email: currentUser.email } : null;
+  const user = currentUser ? { id: currentUser.id, email: currentUser.email, uploadQuotaBytes: currentUser.uploadQuotaBytes ?? null } : null;
   const isAdmin = currentUser?.role === 'admin';
 
   useEffect(() => {
