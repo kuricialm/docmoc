@@ -35,9 +35,9 @@ export default function AdminPage() {
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
-  const [editSuspended, setEditSuspended] = useState(false);
   const [editQuotaGb, setEditQuotaGb] = useState('');
   const [passwordResetValue, setPasswordResetValue] = useState('');
+  const bytesPerGb = 1024 * 1024 * 1024;
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -85,14 +85,13 @@ export default function AdminPage() {
         toast.error('Upload quota must be a number of 0 GB or more, or leave it empty for unlimited.');
         return;
       }
-      uploadQuotaBytes = Math.floor(parsedGb * 1024 * 1024 * 1024);
+      uploadQuotaBytes = Math.floor(parsedGb * bytesPerGb);
     }
     try {
       await api.updateUser(editUser.id, {
         fullName: editName,
         email: editEmail,
         role: editRole,
-        suspended: editSuspended,
         uploadQuotaBytes,
       });
       toast.success('User updated');
@@ -124,6 +123,19 @@ export default function AdminPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  const handleSuspendToggle = async (target: UserProfile) => {
+    const nextSuspended = !target.suspended;
+    if (nextSuspended && !window.confirm(`Suspend ${target.full_name || target.email}?`)) return;
+    try {
+      await api.updateUser(target.id, { suspended: nextSuspended });
+      toast.success(nextSuspended ? 'User suspended' : 'User unsuspended');
+      if (target.id === user?.id) {
+        await refreshProfile();
+      }
+      fetchUsers();
+    } catch (err: any) { toast.error(err.message); }
+  };
+
   const formatLastSignIn = (value: string | null) => {
     if (!value) return 'Never';
     const date = new Date(value);
@@ -136,10 +148,29 @@ export default function AdminPage() {
     setEditRole(u.role);
     setEditName(u.full_name || '');
     setEditEmail(u.email);
-    setEditSuspended(u.suspended);
-    setEditQuotaGb(u.upload_quota_bytes === null ? '' : String(Number((u.upload_quota_bytes / (1024 * 1024 * 1024)).toFixed(2))));
+    if (u.upload_quota_bytes === null) {
+      setEditQuotaGb('');
+    } else {
+      const rawGb = u.upload_quota_bytes / bytesPerGb;
+      const normalized = rawGb.toFixed(6).replace(/\.?0+$/, '');
+      setEditQuotaGb(normalized || '0');
+    }
     setPasswordResetValue('');
   };
+
+  const editUsedBytes = editUser?.total_uploaded_size || 0;
+  const parsedQuotaGb = editQuotaGb.trim() === '' ? null : Number(editQuotaGb);
+  const editQuotaBytesPreview = parsedQuotaGb === null
+    ? null
+    : Number.isFinite(parsedQuotaGb) && parsedQuotaGb >= 0
+      ? Math.floor(parsedQuotaGb * bytesPerGb)
+      : undefined;
+  const editAvailableBytesPreview = typeof editQuotaBytesPreview === 'number'
+    ? Math.max(0, editQuotaBytesPreview - editUsedBytes)
+    : null;
+  const editUsedPercentPreview = typeof editQuotaBytesPreview === 'number'
+    ? (editQuotaBytesPreview <= 0 ? (editUsedBytes > 0 ? 100 : 0) : Math.min(100, (editUsedBytes / editQuotaBytesPreview) * 100))
+    : null;
 
   return (
     <div className="max-w-3xl space-y-6 animate-page-in">
@@ -178,9 +209,19 @@ export default function AdminPage() {
                       Suspended
                     </span>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => openEditUser(u)} className="gap-1.5 text-xs rounded-lg">
-                    <Edit2 className="w-3 h-3" /> Edit User
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={u.suspended ? 'secondary' : 'outline'}
+                      size="sm"
+                      onClick={() => handleSuspendToggle(u)}
+                      className="text-xs rounded-lg"
+                    >
+                      {u.suspended ? 'Unsuspend' : 'Suspend'}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => openEditUser(u)} className="gap-1.5 text-xs rounded-lg">
+                      <Edit2 className="w-3 h-3" /> Edit User
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -213,9 +254,19 @@ export default function AdminPage() {
                         </span>
                       )}
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => openEditUser(u)} className="gap-1.5 text-xs rounded-lg">
-                      <Edit2 className="w-3 h-3" /> Edit User
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant={u.suspended ? 'secondary' : 'outline'}
+                        size="sm"
+                        onClick={() => handleSuspendToggle(u)}
+                        className="text-xs rounded-lg"
+                      >
+                        {u.suspended ? 'Unsuspend' : 'Suspend'}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => openEditUser(u)} className="gap-1.5 text-xs rounded-lg">
+                        <Edit2 className="w-3 h-3" /> Edit User
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -258,24 +309,28 @@ export default function AdminPage() {
       </Dialog>
 
       <Dialog open={!!editUser} onOpenChange={(o) => !o && setEditUser(null)}>
-        <DialogContent className="max-w-xl rounded-xl">
-          <DialogHeader><DialogTitle>Edit User: {editUser?.full_name || editUser?.email}</DialogTitle></DialogHeader>
-          <div className="space-y-5">
-            <div className="rounded-lg border border-border/60 p-4 space-y-4">
-              <p className="text-xs font-medium text-muted-foreground">Profile</p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5 sm:col-span-2">
+        <DialogContent className="max-w-lg rounded-xl p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/50">
+            <DialogTitle className="text-base">Edit User</DialogTitle>
+            <p className="text-xs text-muted-foreground">{editUser?.full_name || editUser?.email}</p>
+          </DialogHeader>
+
+          <div className="px-5 py-4 space-y-4 max-h-[75vh] overflow-y-auto">
+            <section className="space-y-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Profile</p>
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                <div className="space-y-1 sm:col-span-2">
                   <Label className="text-xs">Full Name</Label>
-                  <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-10 rounded-lg" />
+                  <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-9 rounded-lg" />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <Label className="text-xs">Email</Label>
-                  <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="h-10 rounded-lg" />
+                  <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="h-9 rounded-lg" />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <Label className="text-xs">Role</Label>
                   <Select value={editRole} onValueChange={(v) => setEditRole(v as 'admin' | 'user')}>
-                    <SelectTrigger className="h-10 rounded-lg"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 rounded-lg"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="user">User</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
@@ -283,43 +338,35 @@ export default function AdminPage() {
                   </Select>
                 </div>
               </div>
-            </div>
+            </section>
 
-            <div className="rounded-lg border border-border/60 p-4 space-y-3">
-              <p className="text-xs font-medium text-muted-foreground">Storage</p>
-              <div className="space-y-1.5">
+            <section className="space-y-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Storage</p>
+              <div className="space-y-1">
                 <Label className="text-xs">Upload Quota (GB)</Label>
                 <Input
                   type="number"
                   min="0"
-                  step="0.1"
+                  step="any"
                   value={editQuotaGb}
                   onChange={(e) => setEditQuotaGb(e.target.value)}
-                  placeholder="Leave empty for unlimited"
-                  className="h-10 rounded-lg"
+                  placeholder="Empty = unlimited"
+                  className="h-9 rounded-lg"
                 />
-                <p className="text-[11px] text-muted-foreground">
-                  Current uploads: {formatFileSize(editUser?.total_uploaded_size || 0)}
-                </p>
+              </div>
+            </section>
+
+            <div className="rounded-lg border border-border/60 bg-muted/25 px-2.5 py-2 -mt-1">
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground tabular-nums leading-tight">
+                <p>Used: {formatFileSize(editUsedBytes)}</p>
+                <p>Total: {editQuotaBytesPreview === null ? 'Unlimited' : editQuotaBytesPreview === undefined ? 'Invalid value' : formatFileSize(editQuotaBytesPreview)}</p>
+                <p>Available: {editQuotaBytesPreview === null ? 'Unlimited' : editAvailableBytesPreview === null ? '-' : formatFileSize(editAvailableBytesPreview)}</p>
+                <p>Used %: {editQuotaBytesPreview === null ? 'N/A' : editUsedPercentPreview === null ? '-' : `${editUsedPercentPreview.toFixed(1)}%`}</p>
               </div>
             </div>
 
-            <div className="rounded-lg border border-border/60 p-4 space-y-3">
-              <p className="text-xs font-medium text-muted-foreground">Account Controls</p>
-              <div className="flex items-center gap-2">
-                <input
-                  id="suspended"
-                  type="checkbox"
-                  checked={editSuspended}
-                  onChange={(e) => setEditSuspended(e.target.checked)}
-                />
-                <Label htmlFor="suspended" className="text-xs">Suspend account</Label>
-              </div>
-              <Button onClick={handleUserUpdate} className="w-full rounded-lg">Save Changes</Button>
-            </div>
-
-            <div className="pt-1 border-t border-border/50 space-y-2">
-              <Label className="text-xs">Reset Password</Label>
+            <section className="pt-1 border-t border-border/50 space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Password Reset</p>
               <div className="flex gap-2">
                 <Input
                   type="password"
@@ -327,17 +374,25 @@ export default function AdminPage() {
                   minLength={4}
                   onChange={(e) => setPasswordResetValue(e.target.value)}
                   placeholder="New password"
-                  className="h-10 rounded-lg"
+                  className="h-9 rounded-lg"
                 />
-                <Button type="button" variant="secondary" onClick={handlePasswordReset} disabled={passwordResetValue.length < 4}>
+                <Button type="button" variant="secondary" onClick={handlePasswordReset} disabled={passwordResetValue.length < 4} className="h-9 px-3">
                   <KeyRound className="w-4 h-4 mr-1" /> Reset
                 </Button>
               </div>
-            </div>
+            </section>
 
-            <Button type="button" variant="destructive" onClick={handleDeleteUser} className="w-full rounded-lg">
-              <Trash2 className="w-4 h-4 mr-1.5" /> Delete User
-            </Button>
+            <section className="pt-1 border-t border-destructive/30 space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-destructive">Danger Zone</p>
+              <Button type="button" variant="destructive" onClick={handleDeleteUser} className="w-full h-9 rounded-lg">
+                <Trash2 className="w-4 h-4 mr-1.5" /> Delete User
+              </Button>
+            </section>
+          </div>
+
+          <div className="px-5 py-3 border-t border-border/50 bg-background/95 flex items-center justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setEditUser(null)} className="h-9 rounded-lg">Cancel</Button>
+            <Button onClick={handleUserUpdate} className="h-9 rounded-lg">Save Changes</Button>
           </div>
         </DialogContent>
       </Dialog>
