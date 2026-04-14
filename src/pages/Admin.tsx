@@ -63,6 +63,14 @@ export default function AdminPage() {
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!inviteEmail.trim()) {
+      toast.error('Email is required');
+      return;
+    }
+    if (invitePassword.length < 4) {
+      toast.error('Password must be at least 4 characters');
+      return;
+    }
     setInviteLoading(true);
     try {
       await api.createUser(inviteEmail, invitePassword, inviteName || inviteEmail, inviteRole);
@@ -278,7 +286,7 @@ export default function AdminPage() {
       <Dialog open={showInvite} onOpenChange={setShowInvite}>
         <DialogContent className="max-w-sm rounded-xl">
           <DialogHeader><DialogTitle>Create New User</DialogTitle></DialogHeader>
-          <form onSubmit={handleInvite} className="space-y-3">
+          <form onSubmit={handleInvite} className="space-y-3" noValidate>
             <div className="space-y-1.5">
               <Label className="text-xs">Full Name</Label>
               <Input value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="John Doe" className="h-10 rounded-lg" />
@@ -289,7 +297,7 @@ export default function AdminPage() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Password</Label>
-              <Input type="password" value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} required minLength={6} className="h-10 rounded-lg" />
+              <Input type="password" value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} required minLength={4} className="h-10 rounded-lg" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Role</Label>

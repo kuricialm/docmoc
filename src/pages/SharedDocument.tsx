@@ -78,8 +78,8 @@ export default function SharedDocument() {
           <p className="text-sm text-muted-foreground">Enter the share password to access this document.</p>
           <Input type="password" value={sharePassword} onChange={(e) => setSharePassword(e.target.value)} placeholder="Share password" />
           {passwordError && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive flex items-start gap-2">
-              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
               <p>{passwordError}</p>
             </div>
           )}

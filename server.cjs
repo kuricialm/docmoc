@@ -396,9 +396,8 @@ app.post('/api/users', auth, adminOnly, (req, res) => {
   const password = req.body?.password;
   const fullName = req.body?.fullName;
   const role = req.body?.role;
-  if (!email || !isValidPassword(password)) {
-    return res.status(400).json({ error: 'Valid email and password are required' });
-  }
+  if (!email) return res.status(400).json({ error: 'Valid email is required' });
+  if (!isValidPassword(password)) return res.status(400).json({ error: 'Password must be at least 4 characters' });
   if (role && role !== 'admin' && role !== 'user') {
     return res.status(400).json({ error: 'Invalid role' });
   }
@@ -629,9 +628,8 @@ app.post('/api/auth/register', (req, res) => {
   const email = normalizeEmail(req.body?.email);
   const password = req.body?.password;
   const fullName = req.body?.fullName;
-  if (!email || !isValidPassword(password)) {
-    return res.status(400).json({ error: 'Valid email and password are required' });
-  }
+  if (!email) return res.status(400).json({ error: 'Valid email is required' });
+  if (!isValidPassword(password)) return res.status(400).json({ error: 'Password must be at least 4 characters' });
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
   if (existing) return res.status(400).json({ error: 'Email already exists' });
   const hash = bcrypt.hashSync(password, 10);

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { FileText } from 'lucide-react';
+import { AlertCircle, FileText } from 'lucide-react';
 
 export default function Login() {
   const { signIn, appSettings, refreshSettings } = useAuth();
@@ -16,6 +16,7 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [registerMode, setRegisterMode] = useState(false);
+  const [formError, setFormError] = useState('');
   const [settings, setSettings] = useState<api.AppSettings>({ registration_enabled: true, workspace_logo_url: null, workspace_favicon_url: null });
 
   useEffect(() => {
@@ -28,19 +29,38 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
+    if (!email.trim() || !password) {
+      setFormError('Email and password are required.');
+      return;
+    }
     setLoading(true);
     try {
       await signIn(email, password, rememberMe);
     } catch (err: any) {
-      toast.error(err.message);
+      const message = err?.message || 'Unable to sign in.';
+      if (message === 'Invalid email or password') {
+        setFormError('The password you entered is incorrect. Please try again.');
+      } else {
+        setFormError(message);
+      }
     }
     setLoading(false);
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
     if (!settings.registration_enabled) {
       toast.error('Registration is currently disabled');
+      return;
+    }
+    if (!email.trim()) {
+      setFormError('Email is required.');
+      return;
+    }
+    if (password.length < 4) {
+      setFormError('Password must be at least 4 characters.');
       return;
     }
     setLoading(true);
@@ -49,8 +69,10 @@ export default function Login() {
       toast.success('Account created. You can now sign in.');
       setRegisterMode(false);
       setFullName('');
+      setPassword('');
+      setFormError('');
     } catch (err: any) {
-      toast.error(err.message);
+      setFormError(err?.message || 'Unable to create account.');
     }
     setLoading(false);
   };
@@ -77,7 +99,7 @@ export default function Login() {
             </p>
           </div>
 
-          <form onSubmit={submitHandler} className="space-y-4">
+          <form onSubmit={submitHandler} className="space-y-4" noValidate>
             {registerMode && (
               <div className="space-y-2">
                 <Label htmlFor="full-name" className="text-xs font-medium text-muted-foreground">Full Name</Label>
@@ -92,6 +114,12 @@ export default function Login() {
               <Label htmlFor="password" className="text-xs font-medium text-muted-foreground">Password</Label>
               <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" required minLength={4} className="h-10 rounded-lg bg-muted border-transparent focus-visible:border-border focus-visible:ring-0" />
             </div>
+            {formError && (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-destructive flex items-start gap-2 text-sm">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <p>{formError}</p>
+              </div>
+            )}
 
             {!registerMode && (
               <div className="flex items-center gap-2">
@@ -116,7 +144,14 @@ export default function Login() {
           <div className="mt-5 text-center space-y-2">
             {settings.registration_enabled && (
               <div>
-                <button type="button" onClick={() => setRegisterMode(!registerMode)} className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-150">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRegisterMode(!registerMode);
+                    setFormError('');
+                  }}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-150"
+                >
                   {registerMode ? 'Already have an account? Sign in' : 'Need an account? Register'}
                 </button>
               </div>
