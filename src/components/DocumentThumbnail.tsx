@@ -45,6 +45,7 @@ export default memo(function DocumentThumbnail({ docId, fileType, enabled }: Pro
   const [src, setSrc] = useState<string | null>(thumbCache.get(docId) ?? null);
   const [loading, setLoading] = useState(!thumbCache.has(docId));
   const [error, setError] = useState(false);
+  const [sourceAspectRatio, setSourceAspectRatio] = useState<number | null>(null);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -96,14 +97,37 @@ export default memo(function DocumentThumbnail({ docId, fileType, enabled }: Pro
   }
 
   if (src) {
+    const ratio = sourceAspectRatio ?? 1;
+    const isPdf = fileType === PDF_TYPE;
+
+    // Keep framing stable while still adapting to source shape.
+    const frameAspectRatio = isPdf
+      ? Math.min(Math.max(ratio, 0.72), 1.18)
+      : Math.min(Math.max(ratio, 0.9), 1.85);
+    const objectPosition = isPdf ? 'center 20%' : ratio > 1.8 ? 'center 45%' : 'center center';
+
     return (
-      <div className="w-full h-full flex items-center justify-center p-3">
-        <img
-          src={src}
-          alt=""
-          className="max-h-[85%] max-w-[70%] object-contain shadow-md rounded-sm"
-          draggable={false}
-        />
+      <div className="w-full h-full p-[clamp(10px,2.6vw,16px)]">
+        <div className="w-full h-full grid place-items-center">
+          <div
+            className="relative h-full max-w-full overflow-hidden rounded-lg border border-border/40 bg-background/70 shadow-sm"
+            style={{ aspectRatio: frameAspectRatio }}
+          >
+            <img
+              src={src}
+              alt=""
+              className="w-full h-full object-cover"
+              style={{ objectPosition }}
+              draggable={false}
+              onLoad={(event) => {
+                const { naturalWidth, naturalHeight } = event.currentTarget;
+                if (naturalWidth && naturalHeight) {
+                  setSourceAspectRatio(naturalWidth / naturalHeight);
+                }
+              }}
+            />
+          </div>
+        </div>
       </div>
     );
   }
