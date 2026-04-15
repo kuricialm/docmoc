@@ -3,19 +3,22 @@ import type { Document } from '@/hooks/useDocuments';
 
 export const DOCUMENTS_PER_PAGE = 20;
 
-export type DateFilter = 'any' | '7' | '30' | '90' | '365';
+export type DateFilter = 'all' | '7' | '30' | '90';
 export type SortBy = 'created_desc' | 'created_asc' | 'updated_desc' | 'updated_asc';
 
 type Options = {
   lockedTagId?: string;
+  defaultSortBy?: SortBy;
+  dateField?: 'created_at' | 'updated_at';
 };
 
 export function useDocumentBrowse(documents: Document[], search: string, options?: Options) {
-  const [dateFilter, setDateFilter] = useState<DateFilter>('any');
-  const [sortBy, setSortBy] = useState<SortBy>('created_desc');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [sortBy, setSortBy] = useState<SortBy>(options?.defaultSortBy ?? 'created_desc');
   const [fileTypeFilter, setFileTypeFilter] = useState('all');
   const [tagFilter, setTagFilter] = useState(options?.lockedTagId ?? 'all');
   const [page, setPage] = useState(1);
+  const dateField = options?.dateField ?? 'created_at';
 
   useEffect(() => {
     if (options?.lockedTagId) {
@@ -39,18 +42,18 @@ export function useDocumentBrowse(documents: Document[], search: string, options
 
       if (tagFilter !== 'all' && !doc.tags?.some((tag) => tag.id === tagFilter)) return false;
 
-      if (dateFilter !== 'any') {
+      if (dateFilter !== 'all') {
         const days = Number(dateFilter);
         if (Number.isFinite(days)) {
-          const createdAt = new Date(doc.created_at).getTime();
+          const dateTimestamp = new Date(doc[dateField]).getTime();
           const daysMs = days * 24 * 60 * 60 * 1000;
-          if (now - createdAt > daysMs) return false;
+          if (now - dateTimestamp > daysMs) return false;
         }
       }
 
       return true;
     });
-  }, [documents, search, fileTypeFilter, tagFilter, dateFilter]);
+  }, [documents, search, fileTypeFilter, tagFilter, dateFilter, dateField]);
 
   useEffect(() => {
     setPage(1);
@@ -87,8 +90,8 @@ export function useDocumentBrowse(documents: Document[], search: string, options
   }, [sortedDocuments, page]);
 
   const resetFilters = () => {
-    setDateFilter('any');
-    setSortBy('created_desc');
+    setDateFilter('all');
+    setSortBy(options?.defaultSortBy ?? 'created_desc');
     setFileTypeFilter('all');
     setTagFilter(options?.lockedTagId ?? 'all');
   };

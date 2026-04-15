@@ -16,7 +16,7 @@ import BulkDocumentToolbar from '@/components/BulkDocumentToolbar';
 type Props = { viewMode: 'grid' | 'list'; onViewModeChange: (mode: 'grid' | 'list') => void; search: string };
 
 export default function RecentPage({ viewMode, onViewModeChange, search }: Props) {
-  const { data: docs = [] } = useDocuments({ recent: true, recentLimit: 0 });
+  const { data: docs = [] } = useDocuments({ recent: true, recentLimit: 0, sortBy: 'updated' });
   const { data: tags = [] } = useTags();
   const [viewDocId, setViewDocId] = useState<string | null>(null);
   const [renameDoc, setRenameDoc] = useState<Document | null>(null);
@@ -40,7 +40,10 @@ export default function RecentPage({ viewMode, onViewModeChange, search }: Props
     filteredDocuments,
     paginatedDocuments,
     resetFilters,
-  } = useDocumentBrowse(docs, search);
+  } = useDocumentBrowse(docs, search, {
+    defaultSortBy: 'updated_desc',
+    dateField: 'updated_at',
+  });
 
   const viewDoc = useMemo(() => docs.find((doc) => doc.id === viewDocId) ?? null, [docs, viewDocId]);
   const selectedDocs = docs.filter((doc) => selectedIds.has(doc.id));
@@ -79,7 +82,10 @@ export default function RecentPage({ viewMode, onViewModeChange, search }: Props
 
   return (
     <div className="space-y-6 animate-page-in">
-      <h2 className="text-xl font-semibold tracking-tight">Recent</h2>
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight">Recent</h2>
+        <p className="text-sm text-muted-foreground mt-1">Recently changed documents, newest activity first</p>
+      </div>
 
       <DocumentBrowseToolbar
         viewMode={viewMode}
@@ -105,7 +111,7 @@ export default function RecentPage({ viewMode, onViewModeChange, search }: Props
       {filteredDocuments.length === 0 ? (
         <div className="text-center py-20">
           <Clock className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">No matching recent documents</p>
+          <p className="text-sm text-muted-foreground">No matching recently changed documents</p>
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">

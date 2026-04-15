@@ -43,11 +43,10 @@ type Props = {
 };
 
 const dateOptions: { value: DateFilter; label: string }[] = [
-  { value: 'any', label: 'Any time' },
+  { value: 'all', label: 'All time' },
   { value: '7', label: 'Last 7 days' },
   { value: '30', label: 'Last 30 days' },
   { value: '90', label: 'Last 90 days' },
-  { value: '365', label: 'Last year' },
 ];
 
 const sortOptions: { value: SortBy; label: string }[] = [
