@@ -73,7 +73,41 @@ const BASE = RAW_API_BASE
   ? `${RAW_API_BASE.replace(/\/$/, '')}${RAW_API_BASE.endsWith('/api') ? '' : '/api'}`
   : '/api';
 
-async function readJsonBody(res: Response): Promise<any> {
+type JsonRecord = Record<string, unknown>;
+
+type ApiUser = {
+  id: string;
+  email: string;
+  role: 'admin' | 'user';
+  full_name?: string | null;
+  fullName?: string | null;
+  suspended?: boolean | null;
+  last_sign_in_at?: string | null;
+  lastSignInAt?: string | null;
+  total_uploaded_size?: number;
+  totalUploadedSize?: number;
+  upload_quota_bytes?: number | null;
+  uploadQuotaBytes?: number | null;
+  accent_color?: string | null;
+  accentColor?: string | null;
+  avatar_url?: string | null;
+  avatarUrl?: string | null;
+  workspace_logo_url?: string | null;
+  workspaceLogoUrl?: string | null;
+  created_at?: string;
+  createdAt?: string;
+};
+
+const isRecord = (value: unknown): value is JsonRecord =>
+  typeof value === 'object' && value !== null;
+
+const readStringField = (body: unknown, key: string): string | undefined => {
+  if (!isRecord(body)) return undefined;
+  const value = body[key];
+  return typeof value === 'string' ? value : undefined;
+};
+
+async function readJsonBody(res: Response): Promise<unknown> {
   const text = await res.text();
   if (!text) return null;
   try {
@@ -83,9 +117,13 @@ async function readJsonBody(res: Response): Promise<any> {
   }
 }
 
-function getResponseErrorMessage(res: Response, body: any): string {
-  if (body?.error && typeof body.error === 'string') return body.error;
-  if (body?.message && typeof body.message === 'string') return body.message;
+function getResponseErrorMessage(res: Response, body: unknown): string {
+  const errorMessage = readStringField(body, 'error');
+  if (errorMessage) return errorMessage;
+
+  const message = readStringField(body, 'message');
+  if (message) return message;
+
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
     return 'API response was not JSON. Verify your frontend is pointing to the Docmoc backend (/api).';
@@ -118,7 +156,7 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   return body as T;
 }
 
-function mapUser(u: any): User {
+function mapUser(u: ApiUser): User {
   return {
     id: u.id,
     email: u.email,
@@ -137,7 +175,7 @@ function mapUser(u: any): User {
 
 // ---------- Auth ----------
 export async function login(email: string, password: string, rememberMe = false): Promise<User> {
-  const u = await apiFetch<any>('/auth/login', {
+  const u = await apiFetch<ApiUser>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password, rememberMe }),
   });
@@ -150,7 +188,7 @@ export async function signOut(): Promise<void> {
 
 export async function getCurrentUser(): Promise<User | null> {
   try {
-    const u = await apiFetch<any>('/auth/me');
+    const u = await apiFetch<ApiUser>('/auth/me');
     return mapUser(u);
   } catch {
     return null;
@@ -172,7 +210,7 @@ export async function updateEmail(_userId: string, email: string): Promise<void>
 }
 
 export async function createUser(email: string, password: string, fullName: string, role: 'admin' | 'user'): Promise<User> {
-  const u = await apiFetch<any>('/users', {
+  const u = await apiFetch<ApiUser>('/users', {
     method: 'POST',
     body: JSON.stringify({ email, password, fullName, role }),
   });
@@ -180,7 +218,7 @@ export async function createUser(email: string, password: string, fullName: stri
 }
 
 export async function registerUser(email: string, password: string, fullName: string): Promise<User> {
-  const u = await apiFetch<any>('/auth/register', {
+  const u = await apiFetch<ApiUser>('/auth/register', {
     method: 'POST',
     body: JSON.stringify({ email, password, fullName }),
   });
@@ -188,7 +226,7 @@ export async function registerUser(email: string, password: string, fullName: st
 }
 
 export async function getUsers(): Promise<User[]> {
-  const users = await apiFetch<any[]>('/users');
+  const users = await apiFetch<ApiUser[]>('/users');
   return users.map(mapUser);
 }
 
@@ -223,7 +261,7 @@ export async function deleteUser(userId: string): Promise<void> {
 }
 
 export async function updateProfile(userId: string, data: Partial<Pick<User, 'accentColor' | 'workspaceLogoUrl' | 'fullName'>>): Promise<User> {
-  const u = await apiFetch<any>('/profile', {
+  const u = await apiFetch<ApiUser>('/profile', {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
@@ -232,7 +270,7 @@ export async function updateProfile(userId: string, data: Partial<Pick<User, 'ac
 
 export async function getProfile(_userId: string): Promise<User | null> {
   try {
-    const u = await apiFetch<any>('/auth/me');
+    const u = await apiFetch<ApiUser>('/auth/me');
     return mapUser(u);
   } catch {
     return null;
@@ -262,18 +300,26 @@ export type DocFilter = {
   sortBy?: 'updated' | 'created';
 };
 
-export async function uploadDocument(_userId: string, file: File): Promise<DocRecord & { tags: TagRecord[] }> {
+async function uploadFile(path: string, file: File, fallbackErrorMessage: string): Promise<unknown> {
   const formData = new FormData();
   formData.append('file', file);
-  const res = await fetch(`${BASE}/documents/upload`, {
+
+  const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
     credentials: 'include',
     body: formData,
   });
+
   const body = await readJsonBody(res);
   if (!res.ok) {
-    throw new Error(getResponseErrorMessage(res, body) || 'Upload failed');
+    throw new Error(getResponseErrorMessage(res, body) || fallbackErrorMessage);
   }
+
+  return body;
+}
+
+export async function uploadDocument(_userId: string, file: File): Promise<DocRecord & { tags: TagRecord[] }> {
+  const body = await uploadFile('/documents/upload', file, 'Upload failed');
   if (!body) throw new Error('Upload failed: empty response from API');
   return body as DocRecord & { tags: TagRecord[] };
 }
@@ -429,16 +475,8 @@ export async function upsertNote(documentId: string, _userId: string, content: s
 
 // ---------- Logo upload ----------
 export async function uploadLogo(_userId: string, file: File): Promise<string> {
-  const formData = new FormData();
-  formData.append('file', file);
-  const res = await fetch(`${BASE}/profile/logo`, {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  });
-  const data = await readJsonBody(res);
-  if (!res.ok) throw new Error(getResponseErrorMessage(res, data) || 'Logo upload failed');
-  if (!data?.url) throw new Error('Logo upload failed: empty response from API');
+  const data = await uploadFile('/profile/logo', file, 'Logo upload failed');
+  if (!isRecord(data) || typeof data.url !== 'string' || !data.url) throw new Error('Logo upload failed: empty response from API');
   return data.url;
 }
 
@@ -449,16 +487,8 @@ export async function removeLogo(_userId: string): Promise<void> {
 }
 
 export async function uploadFavicon(_userId: string, file: File): Promise<string> {
-  const formData = new FormData();
-  formData.append('file', file);
-  const res = await fetch(`${BASE}/profile/favicon`, {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  });
-  const data = await readJsonBody(res);
-  if (!res.ok) throw new Error(getResponseErrorMessage(res, data) || 'Favicon upload failed');
-  if (!data?.url) throw new Error('Favicon upload failed: empty response from API');
+  const data = await uploadFile('/profile/favicon', file, 'Favicon upload failed');
+  if (!isRecord(data) || typeof data.url !== 'string' || !data.url) throw new Error('Favicon upload failed: empty response from API');
   return data.url;
 }
 

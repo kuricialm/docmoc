@@ -13,7 +13,7 @@ import AdminPage from '@/pages/Admin';
 import { useDocumentMutations } from '@/hooks/useDocuments';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ACCEPTED_UPLOAD_ATTR, isAcceptedUploadFile } from '@/lib/fileTypes';
-import { Upload, UploadCloud } from 'lucide-react';
+import { UploadCloud } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function MainLayout() {
@@ -22,7 +22,6 @@ export default function MainLayout() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
-  const [uploadTrigger, setUploadTrigger] = useState(0);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const dragDepthRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -123,7 +122,7 @@ export default function MainLayout() {
         />
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Routes>
-            <Route path="/" element={<AllDocuments viewMode={viewMode} onViewModeChange={setViewMode} search={search} uploadTrigger={uploadTrigger} />} />
+            <Route path="/" element={<AllDocuments viewMode={viewMode} onViewModeChange={setViewMode} search={search} />} />
             <Route path="/recent" element={<RecentPage viewMode={viewMode} onViewModeChange={setViewMode} search={search} />} />
             <Route path="/starred" element={<StarredPage viewMode={viewMode} onViewModeChange={setViewMode} search={search} />} />
             <Route path="/shared" element={<SharedPage search={search} />} />

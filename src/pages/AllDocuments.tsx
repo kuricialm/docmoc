@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useDocuments, Document } from '@/hooks/useDocuments';
 import { useTags } from '@/hooks/useTags';
 import { useDocumentBrowse } from '@/hooks/useDocumentBrowse';
@@ -9,16 +9,14 @@ import DocumentViewer from '@/components/DocumentViewer';
 import RenameDialog from '@/components/RenameDialog';
 import DocumentBrowseToolbar from '@/components/DocumentBrowseToolbar';
 import { FileText } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
-import * as api from '@/lib/api';
 import BulkDocumentToolbar from '@/components/BulkDocumentToolbar';
+import { useDocumentSelection } from '@/hooks/useDocumentSelection';
+import { useBulkDocumentActions } from '@/hooks/useBulkDocumentActions';
 
 type Props = {
   viewMode: 'grid' | 'list';
   onViewModeChange: (mode: 'grid' | 'list') => void;
   search: string;
-  uploadTrigger?: number;
 };
 
 export default function AllDocuments({ viewMode, onViewModeChange, search }: Props) {
@@ -27,9 +25,15 @@ export default function AllDocuments({ viewMode, onViewModeChange, search }: Pro
   const { data: tags = [] } = useTags();
   const [viewDocId, setViewDocId] = useState<string | null>(null);
   const [renameDoc, setRenameDoc] = useState<Document | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkTagId, setBulkTagId] = useState('');
-  const qc = useQueryClient();
+  const {
+    selectedIds,
+    selectedCount,
+    selectedDocuments,
+    toggleSelection,
+    clearSelection,
+  } = useDocumentSelection(allDocs);
+  const { bulkDelete: runBulkDelete, bulkTag: runBulkTag } = useBulkDocumentActions();
 
   const {
     dateFilter,
@@ -54,47 +58,17 @@ export default function AllDocuments({ viewMode, onViewModeChange, search }: Pro
     [allDocs, viewDocId]
   );
 
-  const selectedCount = selectedIds.size;
-
-  const toggleSelect = (doc: Document) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(doc.id)) next.delete(doc.id);
-      else next.add(doc.id);
-      return next;
-    });
-  };
-
-  const clearSelection = () => setSelectedIds(new Set());
-
-  const selectedDocs = allDocs.filter((doc) => selectedIds.has(doc.id));
-
-  useEffect(() => {
-    setSelectedIds((prev) => {
-      const live = new Set(allDocs.map((doc) => doc.id));
-      const next = new Set<string>();
-      for (const id of prev) {
-        if (live.has(id)) next.add(id);
-      }
-      return next;
-    });
-  }, [allDocs]);
-
   const bulkDelete = async () => {
-    if (selectedDocs.length === 0) return;
-    await Promise.all(selectedDocs.map((doc) => api.trashDocument(doc.id)));
-    await qc.invalidateQueries({ queryKey: ['documents'] });
+    if (selectedDocuments.length === 0) return;
+    await runBulkDelete(selectedDocuments);
     clearSelection();
-    toast.success(`Moved ${selectedDocs.length} document(s) to trash`);
   };
 
   const bulkTag = async () => {
-    if (!bulkTagId || selectedDocs.length === 0) return;
-    await Promise.all(selectedDocs.map((doc) => api.addTagToDocument(doc.id, bulkTagId)));
-    await qc.invalidateQueries({ queryKey: ['documents'] });
+    if (!bulkTagId || selectedDocuments.length === 0) return;
+    await runBulkTag(selectedDocuments, bulkTagId);
     clearSelection();
     setBulkTagId('');
-    toast.success(`Tagged ${selectedDocs.length} document(s)`);
   };
 
   return (
@@ -137,7 +111,7 @@ export default function AllDocuments({ viewMode, onViewModeChange, search }: Pro
               onView={(selected) => setViewDocId(selected.id)}
               onRename={setRenameDoc}
               selected={selectedIds.has(doc.id)}
-              onToggleSelect={toggleSelect}
+              onToggleSelect={toggleSelection}
             />
           ))}
         </div>
@@ -147,7 +121,7 @@ export default function AllDocuments({ viewMode, onViewModeChange, search }: Pro
           onView={(selected) => setViewDocId(selected.id)}
           onRename={setRenameDoc}
           selectedIds={selectedIds}
-          onToggleSelect={toggleSelect}
+          onToggleSelect={toggleSelection}
         />
       )}
       <BulkDocumentToolbar
