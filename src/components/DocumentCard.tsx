@@ -26,7 +26,7 @@ export default function DocumentCard({ document: doc, onView, onRename, selected
 
   return (
     <div
-      className="group bg-muted/40 rounded-xl overflow-hidden cursor-pointer touch-manipulation active:scale-[0.98] md:hover:bg-muted transition-all duration-150"
+      className="group file-card-hover bg-muted/40 rounded-xl overflow-hidden cursor-pointer touch-manipulation active:scale-[0.98] md:hover:bg-muted"
       onClick={() => onView(doc)}
     >
       <div className="h-36 sm:h-40 bg-muted/60 flex items-center justify-center relative overflow-hidden">

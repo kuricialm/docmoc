@@ -58,7 +58,7 @@ export default function SharedPage({ search }: Props) {
       ) : (
         <div className="space-y-2">
           {filtered.map((doc) => (
-            <div key={doc.id} className="bg-card border border-border/50 rounded-xl p-3.5 sm:p-4 hover:border-border/80 transition-colors duration-150">
+            <div key={doc.id} className="file-card-hover bg-card border border-border/50 rounded-xl p-3.5 sm:p-4 hover:border-border/80">
               <div className="flex items-center gap-3 sm:gap-4">
                 <FileTypeIcon fileType={doc.file_type} size="sm" />
                 <div className="flex-1 min-w-0">

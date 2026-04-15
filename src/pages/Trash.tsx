@@ -32,7 +32,7 @@ export default function TrashPage({ search }: Props) {
               ? Math.max(0, 30 - Math.floor((Date.now() - new Date(doc.trashed_at).getTime()) / 86400000))
               : 30;
             return (
-              <div key={doc.id} className="bg-card border border-border/50 rounded-xl flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 hover:border-border/80 transition-colors duration-150">
+              <div key={doc.id} className="file-card-hover bg-card border border-border/50 rounded-xl flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 hover:border-border/80">
                 <FileTypeIcon fileType={doc.file_type} size="sm" />
                 <div className="flex-1 min-w-0">
                   <p className={cn('text-sm font-medium truncate', hasArabicCharacters(doc.name) && 'font-arabic-text')}>

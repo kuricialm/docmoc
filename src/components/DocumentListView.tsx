@@ -121,7 +121,7 @@ export default function DocumentListView({ documents, onView, onRename, selected
           return (
             <div
               key={doc.id}
-              className="bg-card border border-border/50 rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.98] transition-all duration-150 cursor-pointer"
+              className="file-card-hover bg-card border border-border/50 rounded-xl p-3.5 flex items-center gap-3 active:scale-[0.98] cursor-pointer"
               onClick={() => onView(doc)}
             >
               <button
