@@ -56,9 +56,9 @@ export default function DashboardStats({ documents }: Props) {
           <HardDrive className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-1 min-w-0 leading-none whitespace-nowrap">
-            <p className="text-xl sm:text-2xl font-semibold tracking-tight tabular-nums shrink-0">{formatFileSize(totalUploadedSize)}</p>
-            <p className="text-sm sm:text-base font-medium text-muted-foreground/80 tabular-nums truncate">/ {totalQuotaLabel}</p>
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-1 gap-y-0.5 leading-none">
+            <p className="max-w-full text-lg sm:text-2xl font-semibold tracking-tight tabular-nums break-words">{formatFileSize(totalUploadedSize)}</p>
+            <p className="max-w-full text-xs sm:text-sm font-medium text-muted-foreground/80 tabular-nums break-words">/ {totalQuotaLabel}</p>
           </div>
           <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">Storage Used</p>
           <div className="mt-1.5 h-1.5 rounded-full bg-background/80 overflow-hidden">
