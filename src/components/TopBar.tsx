@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, Upload, LogOut, Settings, Menu, Moon, Sun } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from 'next-themes';
+import { useTheme } from '@/hooks/useTheme';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,7 +44,7 @@ export default function TopBar({ search, onSearchChange, onUpload, onMenuToggle,
       </div>
 
       <div className="flex items-center gap-1 ml-auto">
-        <Button variant="ghost" size="icon" className="h-8 w-8 ml-1" onClick={() => setTheme(isDark ? 'light' : 'dark')}>
+        <Button variant="ghost" size="icon" className="h-8 w-8 ml-1" onClick={() => setTheme(isDark ? 'light' : 'dark')} aria-label="Toggle theme">
           {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
         </Button>
 

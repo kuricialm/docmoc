@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import { useTheme } from 'next-themes';
+import { useTheme } from '@/hooks/useTheme';
 import * as api from '@/lib/api';
 
 type Profile = {

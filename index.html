@@ -3,6 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (() => {
+        const theme = localStorage.getItem('docmoc-theme') === 'dark' ? 'dark' : 'light';
+        const root = document.documentElement;
+        root.classList.toggle('dark', theme === 'dark');
+        root.dataset.theme = theme;
+        root.style.colorScheme = theme;
+      })();
+    </script>
+    <style>
+      html {
+        background: #ffffff;
+        color-scheme: light;
+      }
+
+      html.dark {
+        background: #121212;
+        color-scheme: dark;
+      }
+
+      body {
+        background: inherit;
+      }
+    </style>
     <title>Docmoc</title>
     <meta name="description" content="Docmoc workspace" />
     <meta name="author" content="Docmoc" />

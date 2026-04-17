@@ -21,6 +21,7 @@ import { hasArabicCharacters } from '@/lib/text';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUploadedByLabel } from '@/lib/documentMeta';
+import DocumentPreview from './DocumentPreview';
 
 type Props = {
   document: Document | null;
@@ -120,25 +121,22 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
       return;
     }
 
-    let objectUrl: string | null = null;
     const loadPreview = async () => {
-      const blob = await api.getDocumentBlob(doc.id);
-      if (!blob) return;
       if (doc.file_type === 'text/plain') {
+        const blob = await api.getDocumentBlob(doc.id);
+        if (!blob) return;
         const bytes = new Uint8Array(await blob.arrayBuffer());
         const bestText = pickBestTextDecode(bytes);
         setTextContent(bestText);
         setTextIsArabic(hasArabic(bestText));
+        setPreviewUrl(null);
       } else if (doc.file_type === 'application/pdf' || isImageType(doc.file_type)) {
-        objectUrl = URL.createObjectURL(blob);
-        setPreviewUrl(objectUrl);
+        setPreviewUrl(api.getDocumentFileUrl(doc.id));
+        setTextContent(null);
+        setTextIsArabic(false);
       }
     };
     loadPreview();
-
-    return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
   }, [doc, open]);
 
   // Sync from doc props — but never overwrite a locally generated token
@@ -332,7 +330,10 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
   return (
     <>
       <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="w-[96vw] max-w-5xl h-[95vh] sm:h-[82vh] flex flex-col p-0 gap-0 rounded-xl border-border/50 shadow-xl">
+        <DialogContent
+          className="w-[96vw] max-w-5xl h-[95vh] sm:h-[82vh] flex flex-col p-0 gap-0 rounded-xl border-border/50 shadow-xl"
+          onInteractOutside={(event) => event.preventDefault()}
+        >
           <DialogHeader className="px-4 sm:px-6 py-4 border-b border-border/40 shrink-0">
             <div className="flex items-center gap-3">
               <button onClick={handleToggleStar} className="p-1.5 rounded-lg hover:bg-secondary transition-all duration-150" aria-label={optimisticStarred ? 'Unstar document' : 'Star document'}>
@@ -346,25 +347,17 @@ export default function DocumentViewer({ document: doc, open, onClose }: Props) 
 
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             <div className="flex-1 min-h-[220px] lg:min-h-0 bg-gradient-to-br from-secondary/20 to-secondary/5 flex items-center justify-center overflow-auto p-3 sm:p-5">
-              {doc.file_type === 'application/pdf' && previewUrl ? (
-                <iframe src={previewUrl} className="w-full h-full rounded-lg border border-border/30" title="PDF Preview" />
-              ) : doc.file_type === 'text/plain' && textContent !== null ? (
-                <pre
-                  className={`w-full h-full overflow-auto p-4 text-sm bg-card rounded-lg border border-border/30 whitespace-pre-wrap ${textIsArabic ? 'font-arabic-text' : ''}`}
-                >
-                  {textContent}
-                </pre>
-              ) : isImageType(doc.file_type) && previewUrl ? (
-                <img src={previewUrl} alt={doc.name} className="max-w-full max-h-full object-contain rounded-lg" />
-              ) : (
-                <div className="flex flex-col items-center justify-center space-y-4">
-                  <FileTypeIcon fileType={doc.file_type} size="lg" />
-                  <p className="text-sm text-muted-foreground">Preview not available for this format</p>
-                  <Button variant="outline" size="sm" className="rounded-lg" onClick={() => downloadDocument(doc.id, doc.name)}>
-                    <Download className="w-3.5 h-3.5 mr-1.5" /> Download to view
-                  </Button>
-                </div>
-              )}
+              <DocumentPreview
+                fileType={doc.file_type}
+                fileName={doc.name}
+                previewUrl={previewUrl}
+                textContent={textContent}
+                textIsArabic={textIsArabic}
+                className="h-full w-full"
+                imageClassName="max-w-full max-h-full object-contain"
+                iframeClassName="h-full"
+                onDownload={() => downloadDocument(doc.id, doc.name)}
+              />
             </div>
 
             <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-border/40 flex flex-col overflow-y-auto bg-card/30">

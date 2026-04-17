@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { FileText, Download, AlertCircle, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,16 +6,17 @@ import { Input } from '@/components/ui/input';
 import { getFileTypeInfo, formatFileSize, isImageType } from '@/lib/fileTypes';
 import FileTypeIcon from '@/components/FileTypeIcon';
 import * as api from '@/lib/api';
-import { useTheme } from 'next-themes';
+import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { hasArabicCharacters } from '@/lib/text';
 import { getUploadedByLabel } from '@/lib/documentMeta';
+import DocumentPreview from '@/components/DocumentPreview';
 
 
 export default function SharedDocument() {
   const { token } = useParams<{ token: string }>();
-  const [doc, setDoc] = useState<any>(null);
+  const [doc, setDoc] = useState<(api.DocRecord & { tags: api.TagRecord[] }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [textContent, setTextContent] = useState<string | null>(null);
@@ -28,7 +29,7 @@ export default function SharedDocument() {
   const isDark = resolvedTheme === 'dark';
   const { appSettings } = useAuth();
 
-  const loadDocument = async (password?: string, options?: { keepContentVisible?: boolean }) => {
+  const loadDocument = useCallback(async (password?: string, options?: { keepContentVisible?: boolean }) => {
     if (!token) return;
     if (!options?.keepContentVisible) {
       setLoading(true);
@@ -41,15 +42,15 @@ export default function SharedDocument() {
       }
       setDoc(shared);
 
-      const blob = await api.getSharedDocumentBlob(token, password || undefined);
-      if (blob) {
-        if (shared.file_type === 'text/plain') {
+      if (shared.file_type === 'text/plain') {
+        const blob = await api.getSharedDocumentBlob(token, password || undefined);
+        if (blob) {
           setTextContent(await blob.text());
           setPreviewUrl(null);
-        } else if (shared.file_type === 'application/pdf' || isImageType(shared.file_type)) {
-          setPreviewUrl(URL.createObjectURL(blob));
-          setTextContent(null);
         }
+      } else if (shared.file_type === 'application/pdf' || isImageType(shared.file_type)) {
+        setPreviewUrl(api.getSharedDocumentFileUrl(token, password || undefined));
+        setTextContent(null);
       }
 
       setRequiresPassword(false);
@@ -63,11 +64,11 @@ export default function SharedDocument() {
       setLoading(false);
       setUnlocking(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
-    loadDocument();
-  }, [token]);
+    void loadDocument();
+  }, [loadDocument]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><p className="text-muted-foreground text-sm">Loading...</p></div>;
   if (requiresPassword) {
@@ -155,21 +156,17 @@ export default function SharedDocument() {
           </div>
         </div>
         <div className="bg-card border rounded-xl overflow-hidden min-h-[60vh] flex items-center justify-center">
-          {doc.file_type === 'application/pdf' && previewUrl ? (
-            <iframe src={previewUrl} className="w-full h-[70vh]" title="PDF" />
-          ) : doc.file_type === 'text/plain' && textContent !== null ? (
-            <pre className={cn('w-full p-6 text-sm whitespace-pre-wrap', hasArabicCharacters(textContent) && 'font-arabic-text')}>
-              {textContent}
-            </pre>
-          ) : isImageType(doc.file_type) && previewUrl ? (
-            <img src={previewUrl} alt={doc.name} className="max-w-full max-h-[70vh] object-contain" />
-          ) : (
-            <div className="flex flex-col items-center justify-center space-y-3 py-20">
-              <FileTypeIcon fileType={doc.file_type} size="lg" />
-              <p className="text-sm text-muted-foreground">Preview not available</p>
-              <Button variant="outline" size="sm" onClick={handleDownload}><Download className="w-3.5 h-3.5 mr-1.5" /> Download</Button>
-            </div>
-          )}
+          <DocumentPreview
+            fileType={doc.file_type}
+            fileName={doc.name}
+            previewUrl={previewUrl}
+            textContent={textContent}
+            textIsArabic={textContent ? hasArabicCharacters(textContent) : false}
+            className="h-[70vh] w-full"
+            imageClassName="max-h-[70vh] max-w-full object-contain"
+            iframeClassName="h-[70vh] border-0 rounded-none"
+            onDownload={handleDownload}
+          />
         </div>
       </div>
     </div>

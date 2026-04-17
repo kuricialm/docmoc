@@ -390,6 +390,10 @@ export async function downloadDocument(docId: string, fileName: string): Promise
   URL.revokeObjectURL(url);
 }
 
+export function getDocumentFileUrl(docId: string): string {
+  return `${BASE}/documents/${docId}/blob`;
+}
+
 export async function getDocumentBlob(docId: string): Promise<Blob | undefined> {
   try {
     const res = await fetch(`${BASE}/documents/${docId}/blob`, { credentials: 'include' });
@@ -412,6 +416,11 @@ export async function getSharedDocument(token: string, password?: string): Promi
   if (!res.ok) return null;
   const body = await readJsonBody(res);
   return body as (DocRecord & { tags: TagRecord[] }) | null;
+}
+
+export function getSharedDocumentFileUrl(token: string, password?: string): string {
+  const suffix = password ? `?password=${encodeURIComponent(password)}` : '';
+  return `${BASE}/shared/${token}/download${suffix}`;
 }
 
 export async function getSharedDocumentBlob(token: string, password?: string): Promise<Blob | undefined> {
