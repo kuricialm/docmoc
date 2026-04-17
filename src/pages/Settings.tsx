@@ -428,10 +428,10 @@ export default function SettingsPage() {
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">New Email</Label>
               <Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="Enter new email" required className="h-10 rounded-lg" />
-              <p className="text-xs text-muted-foreground">
-                You can update your email easily from this setting.
-              </p>
             </div>
+            <p className="text-xs text-muted-foreground">
+              You can update your email easily from this setting.
+            </p>
             <Button type="submit" size="sm" className="rounded-lg" disabled={emailLoading}>
               {emailLoading ? 'Updating...' : 'Update Email'}
             </Button>

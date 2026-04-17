@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import * as api from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { AlertCircle, FileText } from 'lucide-react';
 
 export default function Login() {
-  const { signIn, appSettings, refreshSettings } = useAuth();
+  const { signIn, appSettings } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -17,15 +17,6 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [registerMode, setRegisterMode] = useState(false);
   const [formError, setFormError] = useState('');
-  const [settings, setSettings] = useState<api.AppSettings>({ registration_enabled: true, workspace_logo_url: null, workspace_favicon_url: null });
-
-  useEffect(() => {
-    refreshSettings();
-  }, [refreshSettings]);
-
-  useEffect(() => {
-    setSettings(appSettings);
-  }, [appSettings]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +42,7 @@ export default function Login() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
-    if (!settings.registration_enabled) {
+    if (!appSettings.registration_enabled) {
       toast.error('Registration is currently disabled');
       return;
     }
@@ -85,8 +76,8 @@ export default function Login() {
         <div className="bg-background border border-border rounded-2xl shadow-sm p-7 sm:p-8">
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2.5 mb-3">
-              {settings.workspace_logo_url ? (
-                <img src={settings.workspace_logo_url} alt="Workspace Logo" className="w-9 h-9 rounded-lg object-contain" />
+              {appSettings.workspace_logo_url ? (
+                <img src={appSettings.workspace_logo_url} alt="Workspace Logo" className="w-9 h-9 rounded-lg object-contain" />
               ) : (
                 <div className="w-9 h-9 rounded-lg bg-foreground flex items-center justify-center">
                   <FileText className="w-5 h-5 text-background" />
@@ -142,7 +133,7 @@ export default function Login() {
           </form>
 
           <div className="mt-5 text-center space-y-2">
-            {settings.registration_enabled && (
+            {appSettings.registration_enabled && (
               <div>
                 <button
                   type="button"
@@ -156,7 +147,7 @@ export default function Login() {
                 </button>
               </div>
             )}
-            {!settings.registration_enabled && !registerMode && (
+            {!appSettings.registration_enabled && !registerMode && (
               <p className="text-xs text-muted-foreground/70">Registration is disabled. Contact an administrator.</p>
             )}
           </div>

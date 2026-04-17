@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import * as api from '@/lib/api';
+import { getFaviconMimeType } from '@/lib/favicon';
 
 type Profile = {
   id: string;
@@ -15,6 +16,7 @@ type AuthContextType = {
   user: { id: string; email: string; uploadQuotaBytes: number | null } | null;
   session: boolean;
   loading: boolean;
+  settingsLoading: boolean;
   isAdmin: boolean;
   profile: Profile | null;
   appSettings: api.AppSettings;
@@ -28,6 +30,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: false,
   loading: true,
+  settingsLoading: true,
   isAdmin: false,
   profile: null,
   appSettings: { registration_enabled: true, workspace_logo_url: null, workspace_favicon_url: null },
@@ -81,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { resolvedTheme } = useTheme();
   const [currentUser, setCurrentUser] = useState<api.User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [settingsLoading, setSettingsLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [appSettings, setAppSettings] = useState<api.AppSettings>({ registration_enabled: true, workspace_logo_url: null, workspace_favicon_url: null });
 
@@ -98,6 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAppSettings(s);
     } catch {
       setAppSettings({ registration_enabled: true, workspace_logo_url: null, workspace_favicon_url: null });
+    } finally {
+      setSettingsLoading(false);
     }
   }, []);
 
@@ -145,17 +151,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const href = appSettings.workspace_favicon_url || '/placeholder.svg';
-    let link = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
-    if (!link) {
-      link = document.createElement('link');
-      link.rel = 'icon';
-      document.head.appendChild(link);
-    }
+    const link = document.createElement('link');
+    link.rel = 'icon';
     link.href = href;
+    const type = getFaviconMimeType(href);
+    if (type) link.type = type;
+    const existing = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
+    if (existing) {
+      existing.replaceWith(link);
+      return;
+    }
+    document.head.appendChild(link);
   }, [appSettings.workspace_favicon_url]);
 
   return (
-    <AuthContext.Provider value={{ user, session: !!user, loading, isAdmin, profile, appSettings, signOut, signIn, refreshProfile, refreshSettings }}>
+    <AuthContext.Provider value={{ user, session: !!user, loading, settingsLoading, isAdmin, profile, appSettings, signOut, signIn, refreshProfile, refreshSettings }}>
       {children}
     </AuthContext.Provider>
   );
