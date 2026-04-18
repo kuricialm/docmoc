@@ -25,7 +25,7 @@ describe('runMigrations', () => {
     runMigrations(db);
 
     const migrations = db.prepare('SELECT id FROM schema_migrations ORDER BY id').all();
-    expect(migrations.length).toBeGreaterThanOrEqual(6);
+    expect(migrations.length).toBeGreaterThanOrEqual(7);
 
     const userColumns = db.prepare('PRAGMA table_info(users)').all().map((col) => col.name);
     const documentColumns = db.prepare('PRAGMA table_info(documents)').all().map((col) => col.name);
@@ -41,6 +41,8 @@ describe('runMigrations', () => {
 
     const registrationSetting = db.prepare("SELECT value FROM settings WHERE key = 'registration_enabled'").get();
     expect(registrationSetting?.value).toBe('true');
+    const trashRetentionSetting = db.prepare("SELECT value FROM settings WHERE key = 'trash_retention_days'").get();
+    expect(trashRetentionSetting?.value).toBe('30');
 
     db.close();
   });

@@ -5,12 +5,15 @@ import { formatFileSize } from '@/lib/fileTypes';
 import FileTypeIcon from '@/components/FileTypeIcon';
 import { cn } from '@/lib/utils';
 import { hasArabicCharacters } from '@/lib/text';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Props = { search: string };
 
 export default function TrashPage({ search }: Props) {
+  const { appSettings } = useAuth();
   const { data: docs = [] } = useDocuments({ trashed: true });
   const { restoreDocument, permanentDelete } = useDocumentMutations();
+  const retentionDays = appSettings.trash_retention_days || 30;
 
   const filtered = docs.filter((d) => d.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -18,7 +21,7 @@ export default function TrashPage({ search }: Props) {
     <div className="space-y-6 animate-page-in">
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Trash</h2>
-        <p className="text-xs text-muted-foreground/70 mt-1">Documents are permanently deleted after 30 days</p>
+        <p className="text-xs text-muted-foreground/70 mt-1">Documents are permanently deleted after {retentionDays} days</p>
       </div>
       {filtered.length === 0 ? (
         <div className="text-center py-20">
@@ -29,8 +32,8 @@ export default function TrashPage({ search }: Props) {
         <div className="space-y-2">
           {filtered.map((doc) => {
             const daysLeft = doc.trashed_at
-              ? Math.max(0, 30 - Math.floor((Date.now() - new Date(doc.trashed_at).getTime()) / 86400000))
-              : 30;
+              ? Math.max(0, retentionDays - Math.floor((Date.now() - new Date(doc.trashed_at).getTime()) / 86400000))
+              : retentionDays;
             return (
               <div key={doc.id} className="file-card-hover bg-card border border-border/50 rounded-xl flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 hover:border-border/80">
                 <FileTypeIcon fileType={doc.file_type} size="sm" />

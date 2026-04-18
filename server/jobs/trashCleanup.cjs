@@ -1,6 +1,6 @@
-function startTrashCleanup({ config, documentFilesStorage, documentsRepository }) {
+function startTrashCleanup({ documentFilesStorage, documentsRepository, settingsService }) {
   function cleanupTrash() {
-    const cutoff = new Date(Date.now() - config.trashRetentionDays * 86400000).toISOString();
+    const cutoff = new Date(Date.now() - settingsService.getTrashRetentionDays() * 86400000).toISOString();
     const rows = documentsRepository.findExpiredTrash(cutoff);
     for (const row of rows) {
       documentFilesStorage.deleteStoredFile(row.storage_path);

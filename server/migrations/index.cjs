@@ -5,4 +5,5 @@ module.exports = [
   require('./004_user_ai_summary_prompt.cjs'),
   require('./005_backfill_user_full_names.cjs'),
   require('./006_default_registration_setting.cjs'),
+  require('./007_default_trash_retention_setting.cjs'),
 ];

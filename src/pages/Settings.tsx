@@ -31,6 +31,7 @@ type BusyKey =
   | 'password'
   | 'email'
   | 'displayName'
+  | 'trashRetention'
   | 'logoUpload'
   | 'logoRemove'
   | 'faviconUpload'
@@ -48,6 +49,7 @@ const INITIAL_BUSY_STATE: BusyState = {
   password: false,
   email: false,
   displayName: false,
+  trashRetention: false,
   logoUpload: false,
   logoRemove: false,
   faviconUpload: false,
@@ -448,6 +450,7 @@ export default function SettingsPage() {
   const [newEmail, setNewEmail] = useState(user?.email ?? '');
   const [displayName, setDisplayName] = useState(profile?.full_name ?? '');
   const [registrationEnabled, setRegistrationEnabled] = useState(true);
+  const [trashRetentionDays, setTrashRetentionDays] = useState(String(appSettings.trash_retention_days || 30));
   const [openRouterSettings, setOpenRouterSettings] = useState<api.OpenRouterSettings | null>(null);
   const [openRouterLoading, setOpenRouterLoading] = useState(false);
   const [openRouterKey, setOpenRouterKey] = useState('');
@@ -486,6 +489,10 @@ export default function SettingsPage() {
   }, [profile?.full_name]);
 
   useEffect(() => {
+    setTrashRetentionDays(String(appSettings.trash_retention_days || 30));
+  }, [appSettings.trash_retention_days]);
+
+  useEffect(() => {
     if (!isAdmin) return;
 
     let cancelled = false;
@@ -493,6 +500,7 @@ export default function SettingsPage() {
       .then((settings) => {
         if (!cancelled) {
           setRegistrationEnabled(settings.registration_enabled);
+          setTrashRetentionDays(String(settings.trash_retention_days));
         }
       })
       .catch(() => {});
@@ -718,6 +726,33 @@ export default function SettingsPage() {
     }
   };
 
+  const handleTrashRetentionSave = async (event: FormEvent) => {
+    event.preventDefault();
+
+    const trimmed = trashRetentionDays.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      toast.error('Trash retention must be a whole number of at least 1 day');
+      return;
+    }
+
+    const parsed = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      toast.error('Trash retention must be a whole number of at least 1 day');
+      return;
+    }
+
+    try {
+      await runBusyAction('trashRetention', async () => {
+        await api.updateSettings({ trash_retention_days: parsed });
+        await refreshSettings();
+        setTrashRetentionDays(String(parsed));
+        toast.success('Trash retention updated');
+      });
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to update trash retention'));
+    }
+  };
+
   const handleOpenRouterKeySave = async (event: FormEvent) => {
     event.preventDefault();
 
@@ -817,12 +852,34 @@ export default function SettingsPage() {
       {isAdmin && (
         <Section>
           <h3 className="text-sm font-semibold">Access Control</h3>
-          <div className="flex items-center justify-between gap-4">
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Allow new user registration</p>
-              <p className="text-xs text-muted-foreground">When disabled, only admins can create users from the Admin page.</p>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Allow new user registration</p>
+                <p className="text-xs text-muted-foreground">When disabled, only admins can create users from the Admin page.</p>
+              </div>
+              <Switch checked={registrationEnabled} onCheckedChange={handleRegistrationToggle} aria-label="Toggle registration" />
             </div>
-            <Switch checked={registrationEnabled} onCheckedChange={handleRegistrationToggle} aria-label="Toggle registration" />
+
+            <form onSubmit={handleTrashRetentionSave} className="space-y-3 border-t border-border/60 pt-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="trash-retention-days" className="text-sm font-medium text-foreground">Trash retention (days)</Label>
+                <p className="text-xs text-muted-foreground">Documents in Trash are permanently deleted after this many days.</p>
+                <Input
+                  id="trash-retention-days"
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  value={trashRetentionDays}
+                  onChange={(event) => setTrashRetentionDays(event.target.value)}
+                  className="h-10 max-w-40 rounded-lg"
+                />
+              </div>
+              <Button type="submit" size="sm" className="rounded-lg" disabled={busyState.trashRetention}>
+                {busyState.trashRetention ? 'Saving...' : 'Save Retention'}
+              </Button>
+            </form>
           </div>
         </Section>
       )}

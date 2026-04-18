@@ -6,6 +6,7 @@ vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
     appSettings: {
       registration_enabled: true,
+      trash_retention_days: 30,
       workspace_favicon_url: null,
       workspace_logo_url: '/api/profile/logo/workspace.png?v=1',
     },

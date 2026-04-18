@@ -116,7 +116,6 @@ function loadConfig(env = process.env) {
     summaryCacheVersion: 'summary-text-v1',
     summaryFormatBrief: 'brief',
     tmpDir: path.join(resolvedPaths.dataDir, 'tmp'),
-    trashRetentionDays: parseInt(env.TRASH_RETENTION_DAYS || '30', 10),
     trustProxy: resolveTrustProxySetting(env.TRUST_PROXY, nodeEnv),
     uploadsDir: path.join(resolvedPaths.dataDir, 'uploads'),
   };

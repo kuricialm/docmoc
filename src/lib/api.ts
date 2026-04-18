@@ -63,12 +63,14 @@ export type DocumentHistoryRecord = {
 
 export type AppSettings = {
   registration_enabled: boolean;
+  trash_retention_days: number;
   workspace_logo_url?: string | null;
   workspace_favicon_url?: string | null;
 };
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   registration_enabled: true,
+  trash_retention_days: 30,
   workspace_logo_url: null,
   workspace_favicon_url: null,
 };

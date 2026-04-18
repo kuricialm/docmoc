@@ -40,6 +40,7 @@ describe('createApp', () => {
       expect(settingsResponse.status).toBe(200);
       await expect(settingsResponse.json()).resolves.toMatchObject({
         registration_enabled: true,
+        trash_retention_days: 30,
         workspace_favicon_url: null,
         workspace_logo_url: null,
       });
