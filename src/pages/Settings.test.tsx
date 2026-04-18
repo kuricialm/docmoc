@@ -129,4 +129,50 @@ describe('SettingsPage', () => {
     });
     expect(refreshSettings).toHaveBeenCalled();
   });
+
+  it('shows only one masked OpenRouter key value when configured', async () => {
+    getOpenRouterSettings.mockResolvedValueOnce({
+      provider: 'openrouter',
+      configured: true,
+      credential: {
+        expires_at: null,
+        key_label: 'sk-or-v1-e75...048',
+        last4: 'b048',
+        last_error: null,
+        last_model_sync_at: null,
+        masked_key: '••••b048',
+        status: 'valid',
+        validated_at: '2026-04-18T10:00:00.000Z',
+      },
+      preferences: {
+        text_model_id: null,
+        vision_model_id: null,
+        summary_prompt: '',
+        summary_prompt_default: '',
+        text_model_valid: true,
+        vision_model_valid: true,
+      },
+      models: {
+        text: [],
+        vision: [],
+        fetched_at: null,
+      },
+      summary_backfill: {
+        missing_count: 0,
+        regeneratable_count: 0,
+        queue_size: 0,
+        auto_generate_on_upload: false,
+        batches: {
+          missing: null,
+          regenerate: null,
+        },
+      },
+    });
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByText('sk-or-v1-e75...048')).toBeInTheDocument();
+    expect(screen.queryByText(/Mask:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('••••b048')).not.toBeInTheDocument();
+  });
 });

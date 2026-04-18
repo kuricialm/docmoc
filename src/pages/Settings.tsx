@@ -183,7 +183,6 @@ function OpenRouterSection({
                     <p>
                       Key: <span className="font-medium text-foreground">{settings.credential?.key_label || settings.credential?.masked_key || 'Validated'}</span>
                     </p>
-                    {settings.credential?.masked_key && <p>Mask: {settings.credential.masked_key}</p>}
                     {formatDateTime(settings.credential?.validated_at) && <p>Validated: {formatDateTime(settings.credential?.validated_at)}</p>}
                     {formatDateTime(settings.credential?.expires_at) && <p>Expires: {formatDateTime(settings.credential?.expires_at)}</p>}
                     {formatDateTime(settings.credential?.last_model_sync_at) && <p>Models synced: {formatDateTime(settings.credential?.last_model_sync_at)}</p>}
