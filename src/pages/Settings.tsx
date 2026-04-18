@@ -849,41 +849,6 @@ export default function SettingsPage() {
     <div className="max-w-2xl space-y-5 animate-page-in">
       <h2 className="text-xl font-semibold tracking-tight">Settings</h2>
 
-      {isAdmin && (
-        <Section>
-          <h3 className="text-sm font-semibold">Access Control</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Allow new user registration</p>
-                <p className="text-xs text-muted-foreground">When disabled, only admins can create users from the Admin page.</p>
-              </div>
-              <Switch checked={registrationEnabled} onCheckedChange={handleRegistrationToggle} aria-label="Toggle registration" />
-            </div>
-
-            <form onSubmit={handleTrashRetentionSave} className="space-y-3 border-t border-border/60 pt-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="trash-retention-days" className="text-sm font-medium text-foreground">Trash retention (days)</Label>
-                <p className="text-xs text-muted-foreground">Documents in Trash are permanently deleted after this many days.</p>
-                <Input
-                  id="trash-retention-days"
-                  type="number"
-                  min={1}
-                  step={1}
-                  inputMode="numeric"
-                  value={trashRetentionDays}
-                  onChange={(event) => setTrashRetentionDays(event.target.value)}
-                  className="h-10 max-w-40 rounded-lg"
-                />
-              </div>
-              <Button type="submit" size="sm" className="rounded-lg" disabled={busyState.trashRetention}>
-                {busyState.trashRetention ? 'Saving...' : 'Save Retention'}
-              </Button>
-            </form>
-          </div>
-        </Section>
-      )}
-
       <Section>
         <h3 className="text-sm font-semibold">Display Name</h3>
         <form onSubmit={handleDisplayNameChange} className="space-y-3">
@@ -954,15 +919,50 @@ export default function SettingsPage() {
       />
 
       {isAdmin && (
-        <BrandingSection
-          workspaceLogoUrl={appSettings.workspace_logo_url}
-          workspaceFaviconUrl={appSettings.workspace_favicon_url}
-          busyState={busyState}
-          onLogoUpload={handleLogoUpload}
-          onLogoRemove={handleLogoRemove}
-          onFaviconUpload={handleFaviconUpload}
-          onFaviconRemove={handleFaviconRemove}
-        />
+        <>
+          <Section>
+            <h3 className="text-sm font-semibold">Access Control</h3>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="flex h-full items-start justify-between gap-4 rounded-xl border border-border/60 bg-muted/15 p-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Allow new user registration</p>
+                  <p className="text-xs text-muted-foreground">When disabled, only admins can create users from the Admin page.</p>
+                </div>
+                <Switch checked={registrationEnabled} onCheckedChange={handleRegistrationToggle} aria-label="Toggle registration" />
+              </div>
+
+              <form onSubmit={handleTrashRetentionSave} className="flex h-full flex-col justify-between gap-3 rounded-xl border border-border/60 bg-muted/15 p-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="trash-retention-days" className="text-sm font-medium text-foreground">Trash retention (days)</Label>
+                  <p className="text-xs text-muted-foreground">Documents in Trash are permanently deleted after this many days.</p>
+                  <Input
+                    id="trash-retention-days"
+                    type="number"
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
+                    value={trashRetentionDays}
+                    onChange={(event) => setTrashRetentionDays(event.target.value)}
+                    className="h-10 max-w-40 rounded-lg"
+                  />
+                </div>
+                <Button type="submit" size="sm" className="w-fit rounded-lg" disabled={busyState.trashRetention}>
+                  {busyState.trashRetention ? 'Saving...' : 'Save Retention'}
+                </Button>
+              </form>
+            </div>
+          </Section>
+
+          <BrandingSection
+            workspaceLogoUrl={appSettings.workspace_logo_url}
+            workspaceFaviconUrl={appSettings.workspace_favicon_url}
+            busyState={busyState}
+            onLogoUpload={handleLogoUpload}
+            onLogoRemove={handleLogoRemove}
+            onFaviconUpload={handleFaviconUpload}
+            onFaviconRemove={handleFaviconRemove}
+          />
+        </>
       )}
 
       <Section>
