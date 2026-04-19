@@ -131,9 +131,22 @@ function validateProductionConfig(config) {
   if (config.nodeEnv !== 'production') return;
 
   const placeholderValues = {
-    AI_SECRETS_MASTER_KEY: new Set(['', 'change-me-for-ai-secrets']),
-    ADMIN_PASSWORD: new Set(['', 'admin']),
-    COOKIE_SECRET: new Set(['', 'change-me-in-production', 'docmoc-secret-change-me']),
+    AI_SECRETS_MASTER_KEY: new Set([
+      '',
+      'change-me-for-ai-secrets',
+      'REPLACE_WITH_A_SEPARATE_LONG_RANDOM_AI_SECRET',
+    ]),
+    ADMIN_PASSWORD: new Set([
+      '',
+      'admin',
+      'REPLACE_WITH_A_STRONG_ADMIN_PASSWORD',
+    ]),
+    COOKIE_SECRET: new Set([
+      '',
+      'change-me-in-production',
+      'docmoc-secret-change-me',
+      'REPLACE_WITH_A_LONG_RANDOM_COOKIE_SECRET',
+    ]),
   };
 
   if (placeholderValues.ADMIN_PASSWORD.has(config.adminPassword)) {

@@ -89,8 +89,9 @@ describe('discoverSummaryRecoveryPaths', () => {
 describe('loadConfig', () => {
   it('rejects placeholder secrets in production', () => {
     expect(() => loadConfig({
-      AI_SECRETS_MASTER_KEY: 'change-me-for-ai-secrets',
-      COOKIE_SECRET: 'change-me-in-production',
+      AI_SECRETS_MASTER_KEY: 'REPLACE_WITH_A_SEPARATE_LONG_RANDOM_AI_SECRET',
+      COOKIE_SECRET: 'REPLACE_WITH_A_LONG_RANDOM_COOKIE_SECRET',
+      ADMIN_PASSWORD: 'REPLACE_WITH_A_STRONG_ADMIN_PASSWORD',
       NODE_ENV: 'production',
       PORT: '3001',
     })).toThrow(/must be set to a non-default value/);

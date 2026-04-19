@@ -10,13 +10,28 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@docmoc.local}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD to a strong value}
-      NODE_ENV: ${NODE_ENV:-production}
-      COOKIE_SECRET: ${COOKIE_SECRET:?Set COOKIE_SECRET to a strong value}
-      AI_SECRETS_MASTER_KEY: ${AI_SECRETS_MASTER_KEY:?Set AI_SECRETS_MASTER_KEY to a strong value}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
-      MAX_BRANDING_UPLOAD_BYTES: ${MAX_BRANDING_UPLOAD_BYTES:-2097152}
-      MAX_CONCURRENT_SUMMARIES_PER_USER: ${MAX_CONCURRENT_SUMMARIES_PER_USER:-2}
-      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-26214400}
+      # Edit the values in this section directly before your first production run.
+
+      # First admin login email.
+      ADMIN_EMAIL: "admin@docmoc.local"
+
+      # First admin login password.
+      ADMIN_PASSWORD: "REPLACE_WITH_A_STRONG_ADMIN_PASSWORD"
+
+      # Run the container in production mode.
+      NODE_ENV: "production"
+
+      # Secret used to sign auth cookies.
+      COOKIE_SECRET: "REPLACE_WITH_A_LONG_RANDOM_COOKIE_SECRET"
+
+      # Separate secret used to encrypt stored AI credentials.
+      AI_SECRETS_MASTER_KEY: "REPLACE_WITH_A_SEPARATE_LONG_RANDOM_AI_SECRET"
+
+      # Allowed browser origins for authenticated requests.
+      ALLOWED_ORIGINS: "http://localhost:3000"
+
+      # Upload limits in bytes.
+      MAX_BRANDING_UPLOAD_BYTES: "2097152"
+      MAX_CONCURRENT_SUMMARIES_PER_USER: "2"
+      MAX_UPLOAD_BYTES: "26214400"
     restart: on-failure:5

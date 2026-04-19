@@ -53,6 +53,14 @@ docker compose up -d
 
 This serves the built frontend and the Express API together from `server.cjs` on container port `3001` (mapped to host `3000` by default in `docker-compose.yml`).
 
+Before first run, edit the `environment:` section in `docker-compose.yml` directly and replace:
+
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+- `COOKIE_SECRET`
+- `AI_SECRETS_MASTER_KEY`
+- `ALLOWED_ORIGINS`
+
 In production, startup now fails if `ADMIN_PASSWORD`, `COOKIE_SECRET`, or `AI_SECRETS_MASTER_KEY` are missing or left on placeholder values.
 
 ### Image tag pinning (recommended for controlled updates)
