@@ -1,37 +1,12 @@
-name: docmoc
-
 services:
   docmoc:
-    container_name: docmoc
     image: ${DOCMOC_IMAGE:-egsa/docmoc:latest}
-    pull_policy: always
     ports:
       - "3000:3001"
     volumes:
       - ./data:/app/data
     environment:
-      # Edit the values in this section directly before your first production run.
-
-      # First admin login email.
       ADMIN_EMAIL: "admin@docmoc.local"
-
-      # First admin login password.
-      ADMIN_PASSWORD: "REPLACE_WITH_A_STRONG_ADMIN_PASSWORD"
-
-      # Run the container in production mode.
+      ADMIN_PASSWORD: "changeme123!"
       NODE_ENV: "production"
-
-      # Secret used to sign auth cookies.
-      COOKIE_SECRET: "REPLACE_WITH_A_LONG_RANDOM_COOKIE_SECRET"
-
-      # Separate secret used to encrypt stored AI credentials.
-      AI_SECRETS_MASTER_KEY: "REPLACE_WITH_A_SEPARATE_LONG_RANDOM_AI_SECRET"
-
-      # Allowed browser origins for authenticated requests.
-      ALLOWED_ORIGINS: "http://localhost:3000"
-
-      # Upload limits in bytes.
-      MAX_BRANDING_UPLOAD_BYTES: "2097152"
-      MAX_CONCURRENT_SUMMARIES_PER_USER: "2"
-      MAX_UPLOAD_BYTES: "26214400"
-    restart: on-failure:5
+    restart: unless-stopped

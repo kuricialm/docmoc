@@ -79,6 +79,10 @@ function createApp(context) {
   app.use(cookieParser(context.config.cookieSecret));
   app.use(createAuthenticatedOriginGuard(context.config));
 
+  app.get('/api/health', (_req, res) => {
+    res.json({ ok: true });
+  });
+
   app.use(createAuthRoutes(routeContext));
   app.use(createUsersRoutes(routeContext));
   app.use(createProfileRoutes(routeContext));

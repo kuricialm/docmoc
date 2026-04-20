@@ -895,6 +895,11 @@ export default function SettingsPage() {
               <Label className="text-xs text-muted-foreground">New Password</Label>
               <Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Enter new password" required minLength={PASSWORD_MIN_LENGTH} className="h-10 rounded-lg" />
             </div>
+            {user?.isUsingDefaultAdminPassword && (
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                You are still using the built-in Synology bootstrap password. Update it now to remove the warning banner.
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">You will be signed out after changing your password.</p>
             <Button type="submit" size="sm" className="rounded-lg" disabled={busyState.password}>
               {busyState.password ? 'Updating...' : 'Update Password'}

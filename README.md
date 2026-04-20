@@ -10,7 +10,7 @@
 
 ## Local secrets hygiene
 
-- Keep real local values in ignored files only. `.env.example` is the safe template; `.env`, `.env.local`, runtime data, uploads, and Playwright screenshots are ignored and should stay out of Git.
+- Keep real local values in ignored files only. `.env`, `.env.local`, runtime data, uploads, and Playwright screenshots are ignored and should stay out of Git.
 - The repo blocks common secret patterns plus protected paths such as `data/`, database files, `.env*`, and `output/playwright/*.png` before push and again in CI.
 
 ## OpenRouter summaries
@@ -44,7 +44,7 @@ MAX_BRANDING_UPLOAD_BYTES=2097152
 
 ## NAS / production run (recommended)
 
-For NAS, do **not** use `npm run dev`. Run the production container instead:
+For NAS, do **not** use `npm run dev`. Use the shipped Compose file directly. No `.env` file is required.
 
 ```bash
 docker compose pull
@@ -53,15 +53,16 @@ docker compose up -d
 
 This serves the built frontend and the Express API together from `server.cjs` on container port `3001` (mapped to host `3000` by default in `docker-compose.yml`).
 
-Before first run, edit the `environment:` section in `docker-compose.yml` directly and replace:
+The default first login is:
 
-- `ADMIN_EMAIL`
-- `ADMIN_PASSWORD`
-- `COOKIE_SECRET`
-- `AI_SECRETS_MASTER_KEY`
-- `ALLOWED_ORIGINS`
+- email: `admin@docmoc.local`
+- password: `changeme123!`
 
-In production, startup now fails if `ADMIN_PASSWORD`, `COOKIE_SECRET`, or `AI_SECRETS_MASTER_KEY` are missing or left on placeholder values.
+On first production start, Docmoc creates `data/.runtime-secrets.json` automatically and stores the runtime `COOKIE_SECRET` plus `AI_SECRETS_MASTER_KEY` there. Those secrets persist across restarts. If you explicitly provide non-placeholder values for either variable in the container environment later, those values take precedence.
+
+After signing in, go to `Settings` immediately and change the bootstrap admin password. The app keeps a warning banner visible until that password has been rotated.
+
+If you expose Docmoc through a custom hostname or reverse proxy and need an explicit origin allow-list, add `ALLOWED_ORIGINS` to the `environment:` block in `docker-compose.yml`.
 
 ### Image tag pinning (recommended for controlled updates)
 

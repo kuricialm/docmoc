@@ -12,6 +12,7 @@ import {
 } from '@dnd-kit/core';
 import { Routes, Route } from 'react-router-dom';
 import AppSidebar from '@/components/AppSidebar';
+import DefaultAdminPasswordBanner from '@/components/DefaultAdminPasswordBanner';
 import TopBar from '@/components/TopBar';
 import AllDocuments from '@/pages/AllDocuments';
 import RecentPage from '@/pages/Recent';
@@ -25,6 +26,7 @@ import { DocumentDragProvider } from '@/contexts/DocumentDragContext';
 import { useDocumentMutations } from '@/hooks/useDocuments';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useTagMutations } from '@/hooks/useTags';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   getDocumentDragGrabOffset,
   DragDocument,
@@ -75,6 +77,7 @@ function DocumentDragPreview({ document }: { document: DragDocument }) {
 }
 
 export default function MainLayout() {
+  const { isAdmin, user } = useAuth();
   const isMobile = useIsMobile();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(isMobile);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -247,16 +250,19 @@ export default function MainLayout() {
               isMobile={isMobile}
             />
             <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-              <Routes>
-                <Route path="/" element={<AllDocuments viewMode={viewMode} onViewModeChange={setViewMode} search={search} />} />
-                <Route path="/recent" element={<RecentPage viewMode={viewMode} onViewModeChange={setViewMode} search={search} />} />
-                <Route path="/starred" element={<StarredPage viewMode={viewMode} onViewModeChange={setViewMode} search={search} />} />
-                <Route path="/shared" element={<SharedPage search={search} />} />
-                <Route path="/trash" element={<TrashPage search={search} />} />
-                <Route path="/tag/:tagId" element={<TagView viewMode={viewMode} onViewModeChange={setViewMode} search={search} />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/admin" element={<AdminPage />} />
-              </Routes>
+              <div className="space-y-6">
+                <DefaultAdminPasswordBanner visible={Boolean(isAdmin && user?.isUsingDefaultAdminPassword)} />
+                <Routes>
+                  <Route path="/" element={<AllDocuments viewMode={viewMode} onViewModeChange={setViewMode} search={search} />} />
+                  <Route path="/recent" element={<RecentPage viewMode={viewMode} onViewModeChange={setViewMode} search={search} />} />
+                  <Route path="/starred" element={<StarredPage viewMode={viewMode} onViewModeChange={setViewMode} search={search} />} />
+                  <Route path="/shared" element={<SharedPage search={search} />} />
+                  <Route path="/trash" element={<TrashPage search={search} />} />
+                  <Route path="/tag/:tagId" element={<TagView viewMode={viewMode} onViewModeChange={setViewMode} search={search} />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/admin" element={<AdminPage />} />
+                </Routes>
+              </div>
             </main>
 
             {isDraggingFiles && (

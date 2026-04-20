@@ -59,6 +59,7 @@ async function signIn(baseUrl, password = 'password123') {
 
   return {
     cookie: response.headers.get('set-cookie')?.split(';')[0] || '',
+    json: response.headers.get('content-type')?.includes('application/json') ? await response.json() : null,
     response,
   };
 }
@@ -76,6 +77,9 @@ describe('app security behavior', () => {
     try {
       const signedIn = await signIn(runtime.baseUrl);
       expect(signedIn.response.status).toBe(200);
+      expect(signedIn.json).toMatchObject({
+        is_using_default_admin_password: false,
+      });
 
       const blockedResponse = await fetch(`${runtime.baseUrl}/api/profile`, {
         method: 'PATCH',

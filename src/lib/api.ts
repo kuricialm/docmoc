@@ -3,6 +3,7 @@ export type User = {
   id: string;
   email: string;
   fullName: string;
+  isUsingDefaultAdminPassword: boolean;
   role: 'admin' | 'user';
   suspended?: boolean;
   lastSignInAt?: string | null;
@@ -178,6 +179,8 @@ type ApiUser = {
   role: 'admin' | 'user';
   full_name?: string | null;
   fullName?: string | null;
+  is_using_default_admin_password?: boolean | null;
+  isUsingDefaultAdminPassword?: boolean | null;
   suspended?: boolean | null;
   last_sign_in_at?: string | null;
   lastSignInAt?: string | null;
@@ -280,6 +283,7 @@ function mapUser(u: ApiUser): User {
     id: u.id,
     email: u.email,
     fullName: u.full_name || u.fullName || '',
+    isUsingDefaultAdminPassword: Boolean(u.is_using_default_admin_password ?? u.isUsingDefaultAdminPassword),
     role: u.role,
     suspended: !!u.suspended,
     lastSignInAt: u.last_sign_in_at || u.lastSignInAt || null,

@@ -24,7 +24,12 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
-    user: { id: 'user-1', email: 'admin@docmoc.local', uploadQuotaBytes: null },
+    user: {
+      id: 'user-1',
+      email: 'admin@docmoc.local',
+      isUsingDefaultAdminPassword: true,
+      uploadQuotaBytes: null,
+    },
     profile: { full_name: 'Admin User', accent_color: '#000000' },
     refreshProfile: vi.fn(),
     isAdmin: true,
@@ -174,5 +179,11 @@ describe('SettingsPage', () => {
     expect(await screen.findByText('sk-or-v1-e75...048')).toBeInTheDocument();
     expect(screen.queryByText(/Mask:/i)).not.toBeInTheDocument();
     expect(screen.queryByText('••••b048')).not.toBeInTheDocument();
+  });
+
+  it('shows the bootstrap password helper text until the admin rotates it', async () => {
+    render(<SettingsPage />);
+
+    expect(await screen.findByText(/built-in Synology bootstrap password/i)).toBeInTheDocument();
   });
 });

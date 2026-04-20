@@ -14,7 +14,7 @@ type Profile = {
 };
 
 type AuthContextType = {
-  user: { id: string; email: string; uploadQuotaBytes: number | null } | null;
+  user: { id: string; email: string; uploadQuotaBytes: number | null; isUsingDefaultAdminPassword: boolean } | null;
   session: boolean;
   loading: boolean;
   settingsLoading: boolean;
@@ -114,7 +114,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [currentUser]);
 
-  const user = currentUser ? { id: currentUser.id, email: currentUser.email, uploadQuotaBytes: currentUser.uploadQuotaBytes ?? null } : null;
+  const user = currentUser
+    ? {
+        email: currentUser.email,
+        id: currentUser.id,
+        isUsingDefaultAdminPassword: currentUser.isUsingDefaultAdminPassword,
+        uploadQuotaBytes: currentUser.uploadQuotaBytes ?? null,
+      }
+    : null;
   const isAdmin = currentUser?.role === 'admin';
 
   useLayoutEffect(() => {

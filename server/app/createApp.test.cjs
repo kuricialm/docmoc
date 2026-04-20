@@ -36,6 +36,10 @@ describe('createApp', () => {
     const baseUrl = `http://127.0.0.1:${address.port}`;
 
     try {
+      const healthResponse = await fetch(`${baseUrl}/api/health`);
+      expect(healthResponse.status).toBe(200);
+      await expect(healthResponse.json()).resolves.toEqual({ ok: true });
+
       const settingsResponse = await fetch(`${baseUrl}/api/settings`);
       expect(settingsResponse.status).toBe(200);
       await expect(settingsResponse.json()).resolves.toMatchObject({

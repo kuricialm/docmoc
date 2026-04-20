@@ -5,14 +5,14 @@ const { startJobs } = require('../jobs/index.cjs');
 function startServer(env = process.env) {
   const context = createContext(env);
   const app = createApp(context);
-  startJobs(context);
+  const stopJobs = startJobs(context);
 
-  app.listen(context.config.port, () => {
+  const server = app.listen(context.config.port, () => {
     console.log(`Docmoc server running on port ${context.config.port}`);
     console.log(`Data directory: ${context.config.dataDir}`);
   });
 
-  return { app, context };
+  return { app, context, server, stopJobs };
 }
 
 module.exports = {

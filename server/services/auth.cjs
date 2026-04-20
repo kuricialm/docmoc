@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { getSessionCookieOptions } = require('../config/index.cjs');
+const { DEFAULT_BOOTSTRAP_ADMIN_PASSWORD } = require('../bootstrap/runtimeSecrets.cjs');
 const { badRequest, forbidden, unauthorized } = require('../errors/apiError.cjs');
 const { isValidPassword, MIN_PASSWORD_LENGTH, normalizeEmail } = require('../validators/common.cjs');
 
@@ -19,17 +20,38 @@ function createAuthService({
       email: user.email,
       fullName: user.full_name,
       id: user.id,
+      is_using_default_admin_password: isUsingDefaultAdminPassword(user),
       role: user.role,
       upload_quota_bytes: user.upload_quota_bytes,
       workspaceLogoUrl: brandingService.getPublicLogoUrl(),
     };
   }
 
-  function buildSessionUser(user) {
+  function buildSessionUser(user, isUsingDefaultPassword = false) {
     return {
-      ...user,
+      accent_color: user.accent_color,
+      avatar_url: user.avatar_url,
+      created_at: user.created_at,
+      email: user.email,
+      full_name: user.full_name,
+      id: user.id,
+      is_using_default_admin_password: isUsingDefaultPassword,
+      last_sign_in_at: user.last_sign_in_at,
+      role: user.role,
+      suspended: user.suspended,
+      upload_quota_bytes: user.upload_quota_bytes,
       workspace_logo_url: brandingService.getPublicLogoUrl(),
     };
+  }
+
+  function isUsingDefaultAdminPassword(user) {
+    return Boolean(
+      user
+      && user.role === 'admin'
+      && config.adminPassword === DEFAULT_BOOTSTRAP_ADMIN_PASSWORD
+      && typeof user.password_hash === 'string'
+      && bcrypt.compareSync(DEFAULT_BOOTSTRAP_ADMIN_PASSWORD, user.password_hash),
+    );
   }
 
   return {
@@ -40,7 +62,8 @@ function createAuthService({
       const user = usersRepository.getById(session.user_id);
       if (!user) throw unauthorized('User not found');
       if (user.suspended) throw forbidden('Account suspended');
-      return buildSessionUser(user);
+      const rawUser = usersRepository.getRawById(session.user_id);
+      return buildSessionUser(user, isUsingDefaultAdminPassword(rawUser));
     },
 
     getOptionalAuthenticatedUserBySessionToken(token) {
