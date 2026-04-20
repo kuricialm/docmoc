@@ -1,6 +1,10 @@
 services:
   docmoc:
-    image: ${DOCMOC_IMAGE:-egsa/docmoc:latest}
+    container_name: docmoc
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${DOCMOC_IMAGE:-docmoc:local}
     ports:
       - "3000:3001"
     volumes:
@@ -9,4 +13,4 @@ services:
       ADMIN_EMAIL: "admin@docmoc.local"
       ADMIN_PASSWORD: "changeme123!"
       NODE_ENV: "production"
-    restart: unless-stopped
+    restart: on-failure:5
