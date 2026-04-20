@@ -45,10 +45,11 @@ MAX_BRANDING_UPLOAD_BYTES=2097152
 ## NAS / production run (recommended)
 
 For NAS, do **not** use `npm run dev`. Use the shipped Compose file directly. No `.env` file is required.
-The Compose file now builds the local Dockerfile by default so Synology runs the code that is actually in this repo instead of an older published image.
+The Compose file uses the published Docker Hub image by default and is set to pull the latest published image on each deploy.
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d --force-recreate
 ```
 
 This serves the built frontend and the Express API together from `server.cjs` on container port `3001` (mapped to host `3000` by default in `docker-compose.yml`).
@@ -64,7 +65,7 @@ After signing in, go to `Settings` immediately and change the bootstrap admin pa
 
 If you expose Docmoc through a custom hostname or reverse proxy and need an explicit origin allow-list, add `ALLOWED_ORIGINS` to the `environment:` block in `docker-compose.yml`.
 
-If you intentionally want to use a published registry image instead of building from source, replace the `build:` block with your preferred image-only configuration before deploying.
+If you want to pin a specific published tag instead of `latest`, set `DOCMOC_IMAGE` to that tag before running Compose.
 
 ## External backend dev proxy example
 

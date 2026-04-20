@@ -15,7 +15,7 @@
     "test:watch": "vitest",
     "docker:dev": "docker buildx build --platform linux/arm64 -t egsa/docmoc:local --load .",
     "docker:release": "docker buildx build --platform linux/amd64,linux/arm64 -t egsa/docmoc:latest --push --cache-from=type=registry,ref=egsa/docmoc:buildcache --cache-to=type=registry,ref=egsa/docmoc:buildcache,mode=max .",
-    "docker:up:local": "docker compose up -d --build --force-recreate"
+    "docker:up:local": "docker compose pull && docker compose up -d --force-recreate"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
