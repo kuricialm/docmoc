@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { Check, ImageOff, Loader2, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -37,6 +37,7 @@ type BusyKey =
   | 'password'
   | 'email'
   | 'displayName'
+  | 'accentColor'
   | 'trashRetention'
   | 'logoUpload'
   | 'logoRemove'
@@ -55,6 +56,7 @@ const INITIAL_BUSY_STATE: BusyState = {
   password: false,
   email: false,
   displayName: false,
+  accentColor: false,
   trashRetention: false,
   logoUpload: false,
   logoRemove: false,
@@ -447,21 +449,28 @@ function BrandingSection({
 
 export default function SettingsPage() {
   const { settings: localSettings, update: updateLocalSettings } = useLocalSettings();
-  const { user, profile, refreshProfile, isAdmin, signOut, appSettings, refreshSettings } = useAuth();
+  const { user, profile, refreshProfile, isAdmin, signOut, appSettings, refreshSettings, updateProfile } = useAuth();
   const userId = user?.id ?? null;
 
   const [busyState, setBusyState] = useState<BusyState>(INITIAL_BUSY_STATE);
   const [newPassword, setNewPassword] = useState('');
   const [newEmail, setNewEmail] = useState(user?.email ?? '');
   const [displayName, setDisplayName] = useState(profile?.full_name ?? '');
+  const [displayNameDirty, setDisplayNameDirty] = useState(false);
   const [registrationEnabled, setRegistrationEnabled] = useState(true);
   const [trashRetentionDays, setTrashRetentionDays] = useState(String(appSettings.trash_retention_days || 30));
+  const [trashRetentionDirty, setTrashRetentionDirty] = useState(false);
   const [openRouterSettings, setOpenRouterSettings] = useState<api.OpenRouterSettings | null>(null);
   const [openRouterLoading, setOpenRouterLoading] = useState(false);
   const [openRouterKey, setOpenRouterKey] = useState('');
   const [textModelId, setTextModelId] = useState('');
   const [visionModelId, setVisionModelId] = useState('');
   const [summaryPrompt, setSummaryPrompt] = useState('');
+  const trashRetentionDirtyRef = useRef(trashRetentionDirty);
+
+  useEffect(() => {
+    trashRetentionDirtyRef.current = trashRetentionDirty;
+  }, [trashRetentionDirty]);
 
   const runBusyAction = useCallback(async <T,>(key: BusyKey, action: () => Promise<T>): Promise<T> => {
     setBusyState((current) => ({ ...current, [key]: true }));
@@ -490,12 +499,16 @@ export default function SettingsPage() {
   }, [user?.email]);
 
   useEffect(() => {
-    setDisplayName(profile?.full_name ?? '');
-  }, [profile?.full_name]);
+    if (!displayNameDirty) {
+      setDisplayName(profile?.full_name ?? '');
+    }
+  }, [displayNameDirty, profile?.full_name]);
 
   useEffect(() => {
-    setTrashRetentionDays(String(appSettings.trash_retention_days || 30));
-  }, [appSettings.trash_retention_days]);
+    if (!trashRetentionDirty) {
+      setTrashRetentionDays(String(appSettings.trash_retention_days || 30));
+    }
+  }, [appSettings.trash_retention_days, trashRetentionDirty]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -505,7 +518,9 @@ export default function SettingsPage() {
       .then((settings) => {
         if (!cancelled) {
           setRegistrationEnabled(settings.registration_enabled);
-          setTrashRetentionDays(String(settings.trash_retention_days));
+          if (!trashRetentionDirtyRef.current) {
+            setTrashRetentionDays(String(settings.trash_retention_days));
+          }
         }
       })
       .catch(() => {});
@@ -641,8 +656,9 @@ export default function SettingsPage() {
 
     try {
       await runBusyAction('displayName', async () => {
-        await api.updateProfile({ fullName: trimmedDisplayName });
-        await refreshProfile();
+        const updatedProfile = await updateProfile({ fullName: trimmedDisplayName });
+        setDisplayName(updatedProfile.fullName ?? '');
+        setDisplayNameDirty(false);
         toast.success('Display name updated');
       });
     } catch (error) {
@@ -670,9 +686,10 @@ export default function SettingsPage() {
     if (!userId) return;
 
     try {
-      await api.updateProfile({ accentColor: color });
-      await refreshProfile();
-      toast.success('Accent color updated');
+      await runBusyAction('accentColor', async () => {
+        await updateProfile({ accentColor: color });
+        toast.success('Accent color updated');
+      });
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to update accent color'));
     }
@@ -755,6 +772,7 @@ export default function SettingsPage() {
         await api.updateSettings({ trash_retention_days: parsed });
         await refreshSettings();
         setTrashRetentionDays(String(parsed));
+        setTrashRetentionDirty(false);
         toast.success('Trash retention updated');
       });
     } catch (error) {
@@ -862,8 +880,18 @@ export default function SettingsPage() {
         <h3 className="text-sm font-semibold">Display Name</h3>
         <form onSubmit={handleDisplayNameChange} className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Full Name</Label>
-            <Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Enter your display name" required className="h-10 rounded-lg" />
+            <Label htmlFor="display-name" className="text-xs text-muted-foreground">Full Name</Label>
+            <Input
+              id="display-name"
+              value={displayName}
+              onChange={(event) => {
+                setDisplayName(event.target.value);
+                setDisplayNameDirty(true);
+              }}
+              placeholder="Enter your display name"
+              required
+              className="h-10 rounded-lg"
+            />
           </div>
           <Button type="submit" size="sm" className="rounded-lg" disabled={busyState.displayName}>
             {busyState.displayName ? 'Updating...' : 'Update Name'}
@@ -876,8 +904,8 @@ export default function SettingsPage() {
           <h3 className="text-sm font-semibold">Change Email</h3>
           <form onSubmit={handleEmailChange} className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">New Email</Label>
-              <Input type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} placeholder="Enter new email" required className="h-10 rounded-lg" />
+              <Label htmlFor="new-email" className="text-xs text-muted-foreground">New Email</Label>
+              <Input id="new-email" type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} placeholder="Enter new email" required className="h-10 rounded-lg" />
             </div>
             <p className="text-xs text-muted-foreground">
               You can update your email easily from this setting.
@@ -892,8 +920,8 @@ export default function SettingsPage() {
           <h3 className="text-sm font-semibold">Change Password</h3>
           <form onSubmit={handlePasswordChange} className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">New Password</Label>
-              <Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Enter new password" required minLength={PASSWORD_MIN_LENGTH} className="h-10 rounded-lg" />
+              <Label htmlFor="new-password" className="text-xs text-muted-foreground">New Password</Label>
+              <Input id="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Enter new password" required minLength={PASSWORD_MIN_LENGTH} className="h-10 rounded-lg" />
             </div>
             {user?.isUsingDefaultAdminPassword && (
               <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
@@ -956,7 +984,10 @@ export default function SettingsPage() {
                     step={1}
                     inputMode="numeric"
                     value={trashRetentionDays}
-                    onChange={(event) => setTrashRetentionDays(event.target.value)}
+                    onChange={(event) => {
+                      setTrashRetentionDays(event.target.value);
+                      setTrashRetentionDirty(true);
+                    }}
                     className="h-10 max-w-40 rounded-lg"
                   />
                 </div>
@@ -1000,8 +1031,10 @@ export default function SettingsPage() {
           {ACCENT_COLORS.map((color) => (
             <button
               key={color}
+              type="button"
               onClick={() => handleAccentChange(color)}
-              className="w-8 h-8 rounded-full border-2 transition-all duration-150 hover:scale-110 active:scale-95"
+              disabled={busyState.accentColor}
+              className="w-8 h-8 rounded-full border-2 transition-all duration-150 hover:scale-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
               style={{ backgroundColor: color, borderColor: profile?.accent_color === color ? 'hsl(var(--foreground))' : 'transparent' }}
             />
           ))}

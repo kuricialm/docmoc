@@ -57,7 +57,7 @@ function SidebarLinkItem({
   const isDropActive = Boolean(dropTargetId && activeTargetId === dropTargetId && isOver);
 
   const baseClasses = collapsed
-    ? 'justify-center px-0'
+    ? 'mx-auto h-10 w-10 justify-center rounded-xl px-0'
     : dotColor
       ? 'gap-2.5 py-1.5 px-2'
       : 'gap-3 px-3 py-2';
@@ -124,20 +124,25 @@ export default function AppSidebar({
 
   return (
     <>
-      {isMobile && mobileOpen && <div className="fixed inset-0 bg-black/20 z-30 transition-opacity" onClick={onMobileClose} />}
+      {isMobile && mobileOpen && <div className="fixed inset-0 z-30 bg-background/80 backdrop-blur-sm transition-opacity" onClick={onMobileClose} />}
       <aside
         aria-hidden={isMobile ? !mobileOpen : undefined}
         className={cn(
           'h-screen flex flex-col border-r border-border bg-background transition-all duration-200 ease-out shrink-0',
           isMobile
             ? cn(
-              'fixed top-0 left-0 z-40 w-[85vw] max-w-64',
+              'fixed top-0 left-0 z-40 w-[calc(100vw-1rem)] max-w-72 shadow-xl',
               mobileOpen ? 'translate-x-0' : '-translate-x-full'
             )
-            : collapsed ? 'w-16' : 'w-56',
+            : collapsed ? 'w-[4.5rem]' : 'w-56',
         )}
       >
-        <div className="h-14 flex items-center px-4 gap-2.5 shrink-0 border-b border-border">
+        <div
+          className={cn(
+            'h-14 shrink-0 border-b border-border',
+            collapsed ? 'flex items-center justify-center px-3' : 'flex items-center gap-2.5 px-4',
+          )}
+        >
           {!collapsed && (
             <>
               {appSettings.workspace_logo_url ? (
@@ -152,13 +157,18 @@ export default function AppSidebar({
           )}
           <button
             onClick={onToggle}
-            className={cn('p-1.5 rounded-lg hover:bg-muted transition-colors duration-150 ml-auto', collapsed && 'mx-auto')}
+            type="button"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-lg hover:bg-muted transition-colors duration-150',
+              !collapsed && 'ml-auto',
+            )}
           >
             <ChevronLeft className={cn('w-4 h-4 text-muted-foreground transition-transform duration-200', collapsed && 'rotate-180')} />
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
+        <nav className={cn('flex-1 overflow-y-auto py-3', collapsed ? 'px-3 space-y-1.5' : 'px-2 space-y-0.5')}>
           {navItems.map((item) => {
             const active = location.pathname === item.path;
             return (
@@ -182,6 +192,7 @@ export default function AppSidebar({
               <div className="flex items-center justify-between mb-2.5">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground/50 font-medium">Tags</p>
                 <button
+                  type="button"
                   onClick={() => setTagManagerOpen(true)}
                   className="p-1 rounded-md hover:bg-muted transition-colors duration-150"
                   title="Manage Tags"
@@ -207,6 +218,7 @@ export default function AppSidebar({
                 })}
                 {(!tags || tags.length === 0) && (
                   <button
+                    type="button"
                     onClick={() => setTagManagerOpen(true)}
                     className="text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors duration-150 py-1"
                   >
@@ -227,7 +239,7 @@ export default function AppSidebar({
               location.pathname === '/settings'
                 ? 'bg-muted text-foreground font-medium'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-              collapsed && 'justify-center px-0',
+              collapsed && 'mx-auto h-10 w-10 justify-center rounded-xl px-0',
             )}
           >
             <Settings className="w-4 h-4 shrink-0" />
@@ -243,7 +255,7 @@ export default function AppSidebar({
                 location.pathname === '/admin'
                   ? 'bg-muted text-foreground font-medium'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                collapsed && 'justify-center px-0',
+                collapsed && 'mx-auto h-10 w-10 justify-center rounded-xl px-0',
               )}
             >
               <Shield className="w-4 h-4 shrink-0" />

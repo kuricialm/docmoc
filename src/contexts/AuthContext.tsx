@@ -25,6 +25,7 @@ type AuthContextType = {
   signIn: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   refreshProfile: () => Promise<void>;
   refreshSettings: () => Promise<void>;
+  updateProfile: (updates: Partial<Pick<api.User, 'accentColor' | 'workspaceLogoUrl' | 'fullName'>>) => Promise<api.User>;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -39,6 +40,9 @@ const AuthContext = createContext<AuthContextType>({
   signIn: async () => {},
   refreshProfile: async () => {},
   refreshSettings: async () => {},
+  updateProfile: async () => {
+    throw new Error('updateProfile is not implemented');
+  },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -114,6 +118,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [currentUser]);
 
+  const updateProfile = useCallback(async (updates: Partial<Pick<api.User, 'accentColor' | 'workspaceLogoUrl' | 'fullName'>>) => {
+    const nextUser = await api.updateProfile(updates);
+    setCurrentUser(nextUser);
+    setProfile(userToProfile(nextUser));
+    return nextUser;
+  }, []);
+
   const user = currentUser
     ? {
         email: currentUser.email,
@@ -126,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useLayoutEffect(() => {
     applyThemePrimaryColor(profile?.accent_color, resolvedTheme);
-  }, [profile?.accent_color, resolvedTheme]);
+  }, [profile, resolvedTheme]);
 
   useEffect(() => {
     const href = appSettings.workspace_favicon_url || '/placeholder.svg';
@@ -144,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [appSettings.workspace_favicon_url]);
 
   return (
-    <AuthContext.Provider value={{ user, session: !!user, loading, settingsLoading, isAdmin, profile, appSettings, signOut, signIn, refreshProfile, refreshSettings }}>
+    <AuthContext.Provider value={{ user, session: !!user, loading, settingsLoading, isAdmin, profile, appSettings, signOut, signIn, refreshProfile, refreshSettings, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

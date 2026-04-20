@@ -6,12 +6,36 @@ const {
   getOpenRouterSettings,
   getSettings,
   refreshSettings,
+  refreshProfile,
+  updateProfile,
   updateSettings,
 } = vi.hoisted(() => ({
   getOpenRouterSettings: vi.fn(),
   getSettings: vi.fn(),
   refreshSettings: vi.fn(),
+  refreshProfile: vi.fn(),
+  updateProfile: vi.fn(),
   updateSettings: vi.fn(),
+}));
+
+const authState = vi.hoisted(() => ({
+  appSettings: {
+    registration_enabled: true,
+    trash_retention_days: 14,
+    workspace_favicon_url: null,
+    workspace_logo_url: null,
+  },
+  isAdmin: true,
+  profile: {
+    accent_color: '#000000',
+    full_name: 'Admin User',
+  },
+  user: {
+    email: 'admin@docmoc.local',
+    id: 'user-1',
+    isUsingDefaultAdminPassword: true,
+    uploadQuotaBytes: null,
+  },
 }));
 
 vi.mock('sonner', () => ({
@@ -24,23 +48,14 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
-    user: {
-      id: 'user-1',
-      email: 'admin@docmoc.local',
-      isUsingDefaultAdminPassword: true,
-      uploadQuotaBytes: null,
-    },
-    profile: { full_name: 'Admin User', accent_color: '#000000' },
-    refreshProfile: vi.fn(),
-    isAdmin: true,
+    user: authState.user,
+    profile: authState.profile,
+    refreshProfile,
+    isAdmin: authState.isAdmin,
     signOut: vi.fn(),
-    appSettings: {
-      registration_enabled: true,
-      trash_retention_days: 14,
-      workspace_favicon_url: null,
-      workspace_logo_url: null,
-    },
+    appSettings: authState.appSettings,
     refreshSettings,
+    updateProfile,
   }),
 }));
 
@@ -79,8 +94,28 @@ describe('SettingsPage', () => {
   beforeEach(() => {
     updateSettings.mockReset();
     refreshSettings.mockReset();
+    refreshProfile.mockReset();
     getSettings.mockReset();
     getOpenRouterSettings.mockReset();
+    updateProfile.mockReset();
+
+    authState.appSettings = {
+      registration_enabled: true,
+      trash_retention_days: 14,
+      workspace_favicon_url: null,
+      workspace_logo_url: null,
+    };
+    authState.isAdmin = true;
+    authState.profile = {
+      full_name: 'Admin User',
+      accent_color: '#000000',
+    };
+    authState.user = {
+      id: 'user-1',
+      email: 'admin@docmoc.local',
+      isUsingDefaultAdminPassword: true,
+      uploadQuotaBytes: null,
+    };
 
     getSettings.mockResolvedValue({
       registration_enabled: true,
@@ -118,6 +153,19 @@ describe('SettingsPage', () => {
     });
     updateSettings.mockResolvedValue(undefined);
     refreshSettings.mockResolvedValue(undefined);
+    refreshProfile.mockResolvedValue(undefined);
+    updateProfile.mockResolvedValue({
+      accentColor: authState.profile.accent_color,
+      avatarUrl: null,
+      createdAt: '2026-04-18T10:00:00.000Z',
+      email: authState.user.email,
+      fullName: authState.profile.full_name,
+      id: authState.user.id,
+      isUsingDefaultAdminPassword: authState.user.isUsingDefaultAdminPassword,
+      role: 'admin',
+      uploadQuotaBytes: authState.user.uploadQuotaBytes,
+      workspaceLogoUrl: null,
+    });
   });
 
   it('loads and saves the admin trash retention setting', async () => {
@@ -185,5 +233,24 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
 
     expect(await screen.findByText(/built-in Synology bootstrap password/i)).toBeInTheDocument();
+  });
+
+  it('keeps the local display-name draft when profile data changes underneath it', async () => {
+    const { rerender } = render(<SettingsPage />);
+
+    const input = await screen.findByLabelText('Full Name');
+    fireEvent.change(input, { target: { value: 'Unsaved Draft' } });
+
+    authState.profile = {
+      ...authState.profile,
+      accent_color: '#3B82F6',
+      full_name: 'Server Refreshed Name',
+    };
+
+    rerender(<SettingsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Full Name')).toHaveValue('Unsaved Draft');
+    });
   });
 });
