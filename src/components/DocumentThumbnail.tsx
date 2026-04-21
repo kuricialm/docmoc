@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, memo } from 'react';
 import * as api from '@/lib/api';
 import { SAFE_IMAGE_MIME_TYPES } from '@/lib/fileTypes';
+import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 import FileTypeIcon from './FileTypeIcon';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -24,8 +25,9 @@ type Props = {
 };
 
 async function renderPdfThumb(blob: Blob): Promise<string> {
-  const pdfjsLib = await import('pdfjs-dist');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  // Keep the worker local so PDF thumbnails still work without CDN access.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
   const arrayBuffer = await blob.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -77,7 +79,10 @@ export default memo(function DocumentThumbnail({ docId, fileType, enabled }: Pro
 
         thumbCache.set(docId, url);
         if (mounted.current) setSrc(url);
-      } catch {
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('Failed to render document thumbnail.', error);
+        }
         if (mounted.current) setError(true);
       } finally {
         if (mounted.current) setLoading(false);
